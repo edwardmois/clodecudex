@@ -64,6 +64,36 @@ describe('TaskBoard', () => {
       board.claimTask(t.id, 'claude');
       expect(board.canEdit('codex', 'src\\auth\\jwt.ts')).toBe(false);
     });
+
+    it('canonicalizes absolute paths against the project root', () => {
+      const board = new TaskBoard('/repo');
+      const t = board.createTask('auth', ['src/auth/**'], 'user');
+      board.claimTask(t.id, 'claude');
+      expect(board.canEdit('codex', '/repo/src/auth/jwt.ts')).toBe(false);
+      expect(board.isFileOwnedBy('claude', '/repo/src/auth/jwt.ts')).toBe(true);
+    });
+
+    it('is not fooled by ../ traversal inside the workspace', () => {
+      const board = new TaskBoard('/repo');
+      const t = board.createTask('auth', ['src/auth/**'], 'user');
+      board.claimTask(t.id, 'claude');
+      expect(board.canEdit('codex', 'src/other/../auth/jwt.ts')).toBe(false);
+    });
+
+    it('fails closed on paths escaping the project root', () => {
+      const board = new TaskBoard('/repo');
+      board.claimTask(board.createTask('auth', ['src/auth/**'], 'user').id, 'claude');
+      expect(board.canEdit('codex', '../outside/file.ts')).toBe(false);
+      expect(board.canEdit('claude', '/etc/passwd')).toBe(false);
+      expect(board.isFileOwnedBy('claude', '../outside/file.ts')).toBe(false);
+    });
+
+    it('matches case-insensitively (Windows/macOS filesystems)', () => {
+      const board = new TaskBoard('/repo');
+      const t = board.createTask('auth', ['src/auth/**'], 'user');
+      board.claimTask(t.id, 'claude');
+      expect(board.canEdit('codex', 'SRC/Auth/JWT.TS')).toBe(false);
+    });
   });
 
   describe('review flow', () => {

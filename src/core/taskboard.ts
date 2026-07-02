@@ -1,3 +1,4 @@
+import path from 'node:path';
 import picomatch from 'picomatch';
 import { otherAgent, type AgentName, type Participant, type Task } from './types.js';
 
@@ -6,8 +7,20 @@ type ChangeListener = (task: Task) => void;
 /** Statuses during which a task's file globs are exclusively owned. */
 const ACTIVE: ReadonlySet<Task['status']> = new Set(['claimed', 'review']);
 
-function normalizePath(p: string): string {
-  return p.replace(/\\/g, '/').replace(/^\.\//, '');
+/**
+ * Ownership is a coarse guard, so matching is case-insensitive everywhere:
+ * on case-insensitive filesystems (Windows/macOS) `SRC/auth/x.ts` and
+ * `src/auth/x.ts` are the same file, and over-blocking beats under-blocking.
+ */
+const MATCH_OPTS = { nocase: true } as const;
+
+function toPosix(p: string): string {
+  return p.replace(/\\/g, '/');
+}
+
+/** Normalize a glob pattern: posix separators, no leading `./`. */
+function normalizeGlob(pattern: string): string {
+  return toPosix(pattern).replace(/^\.\//, '');
 }
 
 /**
@@ -17,8 +30,8 @@ function normalizePath(p: string): string {
  * concrete file listed under another task's directory glob.
  */
 function globsCollide(a: string, b: string): boolean {
-  if (a === b) return true;
-  return picomatch(a)(b) || picomatch(b)(a);
+  if (a.toLowerCase() === b.toLowerCase()) return true;
+  return picomatch(a, MATCH_OPTS)(b) || picomatch(b, MATCH_OPTS)(a);
 }
 
 /**
@@ -30,13 +43,18 @@ function globsCollide(a: string, b: string): boolean {
 export class TaskBoard {
   private readonly tasks = new Map<string, Task>();
   private readonly listeners = new Set<ChangeListener>();
+  private readonly projectRoot: string;
   private nextId = 1;
+
+  constructor(projectRoot: string = process.cwd()) {
+    this.projectRoot = path.resolve(projectRoot);
+  }
 
   createTask(title: string, files: string[], createdBy: Participant): Task {
     const task: Task = {
       id: `T${this.nextId++}`,
       title,
-      files: files.map(normalizePath),
+      files: files.map(normalizeGlob),
       status: 'open',
       createdBy,
     };
@@ -107,20 +125,43 @@ export class TaskBoard {
     return task;
   }
 
-  /** True when `path` matches a glob of a task actively owned by `agent`. */
-  isFileOwnedBy(agent: AgentName, path: string): boolean {
-    const p = normalizePath(path);
-    return this.activeGlobs(agent).some((glob) => picomatch(glob)(p));
+  /** True when `filePath` matches a glob of a task actively owned by `agent`. */
+  isFileOwnedBy(agent: AgentName, filePath: string): boolean {
+    const relative = this.toProjectRelative(filePath);
+    if (relative === undefined) return false; // outside the workspace — nobody owns it
+    return this.activeGlobs(agent).some((glob) => picomatch(glob, MATCH_OPTS)(relative));
   }
 
-  /** An agent may edit anything not actively owned by the other agent. */
-  canEdit(agent: AgentName, path: string): boolean {
-    return !this.isFileOwnedBy(otherAgent(agent), path);
+  /**
+   * An agent may edit anything not actively owned by the other agent.
+   * Paths that escape the project root fail closed: the agents' own
+   * sandboxes are the authority outside the workspace, not the board.
+   */
+  canEdit(agent: AgentName, filePath: string): boolean {
+    const relative = this.toProjectRelative(filePath);
+    if (relative === undefined) return false;
+    return !this.activeGlobs(otherAgent(agent)).some((glob) =>
+      picomatch(glob, MATCH_OPTS)(relative),
+    );
   }
 
   onChange(listener: ChangeListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * Canonicalize any incoming path (relative, absolute, `..`-laden, or
+   * Windows-style) to a posix path relative to the project root. Returns
+   * undefined for paths that resolve outside the root.
+   */
+  private toProjectRelative(filePath: string): string | undefined {
+    const resolved = path.resolve(this.projectRoot, filePath);
+    const relative = path.relative(this.projectRoot, resolved);
+    if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+      return undefined;
+    }
+    return toPosix(relative);
   }
 
   private activeGlobs(agent: AgentName): string[] {
