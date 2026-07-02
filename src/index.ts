@@ -26,10 +26,33 @@ program
   .option('--yolo', 'skip permission prompts for both agents (dangerous)', false)
   .option('--config <path>', 'path to a ccx config file')
   .action(async (opts: { yolo: boolean; config?: string }) => {
-    // TUI entry is wired in a later phase; for now prove the toolchain works.
-    console.log(`ccx v${version} — two co-founders, one terminal`);
-    console.log('Session startup not implemented yet.');
-    if (opts.yolo) console.log('(yolo mode requested)');
+    const { runDoctor, formatDoctorReport } = await import('./doctor.js');
+    const results = await runDoctor(process.cwd());
+    if (!results.every((r) => r.ok)) {
+      console.error(formatDoctorReport(results));
+      console.error('\nFix the failing checks above, then run ccx again.');
+      process.exit(1);
+    }
+
+    const { loadConfig } = await import('./config/config.js');
+    const config = loadConfig(process.cwd(), opts.config);
+    if (opts.yolo) {
+      config.claude.permissionMode = 'bypassPermissions';
+      config.codex.sandbox = 'danger-full-access';
+    }
+
+    const { Session } = await import('./core/session.js');
+    const session = new Session({ cwd: process.cwd(), config });
+    await session.start();
+
+    const [{ default: React }, { render }, { App }] = await Promise.all([
+      import('react'),
+      import('ink'),
+      import('./tui/App.js'),
+    ]);
+    const app = render(React.createElement(App, { session }), { exitOnCtrlC: true });
+    await app.waitUntilExit();
+    await session.stop();
   });
 
 await program.parseAsync(process.argv);
