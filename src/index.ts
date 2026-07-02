@@ -8,6 +8,16 @@ const { version } = require('../package.json') as { version: string };
 const program = new Command();
 
 program
+  .command('doctor')
+  .description('Check that Claude Code and Codex CLI are installed, logged in, and ready')
+  .action(async () => {
+    const { runDoctor, formatDoctorReport } = await import('./doctor.js');
+    const results = await runDoctor(process.cwd());
+    console.log(formatDoctorReport(results));
+    process.exitCode = results.every((r) => r.ok) ? 0 : 1;
+  });
+
+program
   .name('ccx')
   .description(
     'Claude Code + Codex CLI as two AI co-founders working simultaneously on your codebase',
