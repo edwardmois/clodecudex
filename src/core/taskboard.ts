@@ -89,6 +89,22 @@ export class TaskBoard {
     return task;
   }
 
+  /** Un-claim a task (wrong claim, blocked, re-planning). Back to open. */
+  releaseTask(id: string, agent: AgentName): Task {
+    const task = this.mustGet(id);
+    if (task.owner !== agent) {
+      throw new Error(`Only the owner (${task.owner ?? 'nobody'}) can release ${id}`);
+    }
+    if (!ACTIVE.has(task.status)) {
+      throw new Error(`Task ${id} is not active (status: ${task.status})`);
+    }
+    task.status = 'open';
+    delete task.owner;
+    delete task.reviewSummary;
+    this.emit(task);
+    return task;
+  }
+
   requestReview(id: string, agent: AgentName, summary: string): Task {
     const task = this.mustGet(id);
     if (task.owner !== agent) {

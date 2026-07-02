@@ -96,6 +96,28 @@ describe('TaskBoard', () => {
     });
   });
 
+  describe('release flow', () => {
+    it('owner releases a claimed task back to open, freeing its files', () => {
+      const board = new TaskBoard();
+      const t = board.createTask('auth', ['src/auth/**'], 'user');
+      board.claimTask(t.id, 'claude');
+      board.releaseTask(t.id, 'claude');
+
+      expect(board.getTask(t.id)?.status).toBe('open');
+      expect(board.getTask(t.id)?.owner).toBeUndefined();
+      expect(board.canEdit('codex', 'src/auth/jwt.ts')).toBe(true);
+      // and it can be re-claimed by the other agent
+      expect(() => board.claimTask(t.id, 'codex')).not.toThrow();
+    });
+
+    it('non-owners cannot release', () => {
+      const board = new TaskBoard();
+      const t = board.createTask('auth', [], 'user');
+      board.claimTask(t.id, 'claude');
+      expect(() => board.releaseTask(t.id, 'codex')).toThrow(/owner/i);
+    });
+  });
+
   describe('review flow', () => {
     it('owner requests review, the other agent approves by completing', () => {
       const board = new TaskBoard();

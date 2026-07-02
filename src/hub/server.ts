@@ -204,6 +204,17 @@ export class FoundersHub {
     );
 
     server.registerTool(
+      'release_task',
+      {
+        description:
+          'Un-claim a task you own (wrong claim, blocked, or re-planning). ' +
+          'It returns to open and its file ownership is released.',
+        inputSchema: { id: z.string() },
+      },
+      async ({ id }) => respond(() => formatTask(board.releaseTask(id, agent))),
+    );
+
+    server.registerTool(
       'request_review',
       {
         description:

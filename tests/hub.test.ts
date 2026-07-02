@@ -53,6 +53,7 @@ describe('FoundersHub', () => {
       'create_task',
       'list_tasks',
       'post_message',
+      'release_task',
       'request_review',
     ]);
   });
