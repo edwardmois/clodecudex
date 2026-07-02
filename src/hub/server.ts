@@ -55,6 +55,11 @@ export class FoundersHub {
     return `http://127.0.0.1:${this.port}/hub/${this.token}/${agent}`;
   }
 
+  /** Plain HTTP endpoint the Claude PreToolUse hook POSTs {path} to. */
+  ownershipUrlFor(agent: AgentName): string {
+    return `${this.urlFor(agent)}/ownership`;
+  }
+
   async start(): Promise<void> {
     if (this.httpServer) throw new Error('FoundersHub already started');
     const server = createServer((req, res) => {
@@ -87,16 +92,37 @@ export class FoundersHub {
 
   private async route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${this.port}`);
-    const parts = url.pathname.split('/').filter(Boolean); // [hub, token, agent]
+    const parts = url.pathname.split('/').filter(Boolean); // [hub, token, agent, endpoint?]
     const agent = parts[2] as AgentName | undefined;
     if (
-      parts.length !== 3 ||
+      (parts.length !== 3 && parts.length !== 4) ||
       parts[0] !== 'hub' ||
       parts[1] !== this.token ||
       !agent ||
       !AGENT_NAMES.includes(agent)
     ) {
       res.writeHead(404).end();
+      return;
+    }
+
+    // Plain HTTP endpoint (not MCP) used by the Claude PreToolUse hook.
+    if (parts.length === 4) {
+      if (parts[3] !== 'ownership' || req.method !== 'POST') {
+        res.writeHead(404).end();
+        return;
+      }
+      const body = (await readJsonBody(req)) as { path?: string } | undefined;
+      const filePath = body?.path;
+      const allowed = typeof filePath === 'string' ? this.board.canEdit(agent, filePath) : false;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          allowed,
+          reason: allowed
+            ? undefined
+            : `"${filePath ?? ''}" is owned by the other founder right now — coordinate on the board first (or the path is outside the workspace).`,
+        }),
+      );
       return;
     }
 
