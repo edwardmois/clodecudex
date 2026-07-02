@@ -59,6 +59,11 @@ export class MessageBus {
     return this.pendingFor(recipient).some((m) => m.to === recipient);
   }
 
+  /** Undelivered messages for `recipient` WITHOUT marking them delivered. */
+  peekFor(recipient: Participant): ChatMessage[] {
+    return this.pendingFor(recipient);
+  }
+
   private pendingFor(recipient: Participant): ChatMessage[] {
     const cursor = this.cursors.get(recipient) ?? 0;
     return this.messages
