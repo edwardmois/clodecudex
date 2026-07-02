@@ -1,0 +1,60 @@
+{
+  "name": "claudecodex",
+  "version": "0.1.0",
+  "description": "Run Claude Code and OpenAI Codex CLI as two AI co-founders working simultaneously on your codebase — live 3-way chat, shared task board, parallel editing. Uses your existing subscriptions, no API keys.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ccx": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "ai",
+    "agents",
+    "multi-agent",
+    "orchestrator",
+    "cli",
+    "tui",
+    "pair-programming"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edwardmoiseev/claudecodex.git"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.198",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^15.0.0",
+    "ink": "^7.1.0",
+    "ink-text-input": "^6.0.0",
+    "picomatch": "^4.0.5",
+    "react": "^19.2.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/picomatch": "^4.0.2",
+    "@types/react": "^19.2.7",
+    "tsx": "^4.22.5",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

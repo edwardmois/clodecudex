@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+FOUNDERS_NOTES.md
+.ccx/
+npm-debug.log*
