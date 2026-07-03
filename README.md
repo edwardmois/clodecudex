@@ -1,4 +1,4 @@
-# ccx — ClaudeCodeX
+# clodecudex (`ccx`)
 
 > Two AI co-founders in one terminal. **Claude Code** and **OpenAI Codex CLI** working together on your codebase — live 3-way chat, a shared task board, cross-review by the model that didn't write the code. Runs on the subscriptions you already have. **Zero API keys.**
 
@@ -62,7 +62,7 @@ Running two coordinated agents costs more total tokens than one agent doing ever
 ## Quick start
 
 ```bash
-npm install -g claudecodex
+npm install -g clodecudex
 
 cd your-project
 ccx doctor        # verify both CLIs are installed and logged in

@@ -1,5 +1,5 @@
 {
-  "name": "claudecodex",
+  "name": "clodecudex",
   "version": "0.1.0",
   "description": "Run Claude Code and OpenAI Codex CLI as two AI co-founders working simultaneously on your codebase — live 3-way chat, shared task board, parallel editing. Uses your existing subscriptions, no API keys.",
   "type": "module",
@@ -37,7 +37,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/edwardmoiseev/claudecodex.git"
+    "url": "git+https://github.com/edwardmois/clodecudex.git"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
