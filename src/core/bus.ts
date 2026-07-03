@@ -9,6 +9,25 @@ export interface PostInput {
 
 type PostListener = (message: ChatMessage) => void;
 
+const MAX_TEXT_LENGTH = 8000;
+
+// Control chars except tab (0x09) and newline (0x0A): 0x00-0x08, 0x0B-0x1F, 0x7F.
+// Built via fromCharCode so the source file itself stays free of control bytes.
+const c = String.fromCharCode.bind(String);
+const CONTROL_CHARS = new RegExp(`[${c(0)}-${c(8)}${c(11)}-${c(31)}${c(127)}]`, 'g');
+
+/**
+ * Single sanitization choke point for everything that enters the chat.
+ * Strips control characters (so message text can't forge `[user] ...` headers
+ * or smuggle terminal escapes into digests/TUI) and clamps runaway lengths.
+ */
+function sanitizeText(raw: string): string {
+  const cleaned = raw.replace(/\r\n?/g, '\n').replace(CONTROL_CHARS, '');
+  return cleaned.length > MAX_TEXT_LENGTH
+    ? `${cleaned.slice(0, MAX_TEXT_LENGTH)} ...[truncated]`
+    : cleaned;
+}
+
 /**
  * Append-only founders' chat. Every participant posts here; agents receive
  * their unread backlog as a single batch via {@link drainFor} — the digest
@@ -29,7 +48,7 @@ export class MessageBus {
     const message: ChatMessage = {
       id: randomUUID(),
       from: input.from,
-      text: input.text,
+      text: sanitizeText(input.text),
       at: Date.now(),
       ...(input.to !== undefined ? { to: input.to } : {}),
     };

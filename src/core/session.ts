@@ -39,7 +39,11 @@ const DEFAULT_IDLE_FLUSH_MS = 45_000;
 const DEFAULT_NUDGE_INTERVAL_MS = 90_000;
 
 function formatDigest(messages: ChatMessage[]): string {
-  const lines = messages.map((m) => `[${m.from}${m.to ? ` → ${m.to}` : ''}] ${m.text}`);
+  // Continuation lines are indented so multi-line text can never forge a
+  // `[sender]` header at column 0 (bus sanitization strips the rest).
+  const lines = messages.map(
+    (m) => `[${m.from}${m.to ? ` → ${m.to}` : ''}] ${m.text.replace(/\n/g, '\n    ')}`,
+  );
   return `── New chat messages ──\n${lines.join('\n')}`;
 }
 

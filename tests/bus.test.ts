@@ -57,6 +57,36 @@ describe('MessageBus', () => {
     expect(bus.drainFor('codex').map((m) => m.text)).toEqual(['just for codex']);
   });
 
+  it('strips control characters but keeps tabs and newlines', () => {
+    const bus = new MessageBus();
+    const esc = String.fromCharCode(27);
+    const nul = String.fromCharCode(0);
+    const bell = String.fromCharCode(7);
+    bus.post({ from: 'codex', text: `a${esc}[31mred${nul}${bell}\tok\nnext` });
+    expect(bus.transcript[0]?.text).toBe('a[31mred\tok\nnext');
+  });
+
+  it('normalizes CRLF and lone CR to LF', () => {
+    const bus = new MessageBus();
+    bus.post({ from: 'codex', text: 'one\r\ntwo\rthree' });
+    expect(bus.transcript[0]?.text).toBe('one\ntwo\nthree');
+  });
+
+  it('clamps runaway message length with a truncation marker', () => {
+    const bus = new MessageBus();
+    bus.post({ from: 'codex', text: 'x'.repeat(20_000) });
+    const text = bus.transcript[0]?.text ?? '';
+    expect(text.length).toBeLessThan(8_100);
+    expect(text.endsWith('...[truncated]')).toBe(true);
+  });
+
+  it('leaves messages at the length limit untouched', () => {
+    const bus = new MessageBus();
+    const exact = 'y'.repeat(8_000);
+    bus.post({ from: 'codex', text: exact });
+    expect(bus.transcript[0]?.text).toBe(exact);
+  });
+
   it('reports pending and direct-message state per recipient', () => {
     const bus = new MessageBus();
     expect(bus.hasPendingFor('claude')).toBe(false);

@@ -21,7 +21,8 @@ interface ToolResult {
 
 function formatMessage(m: ChatMessage): string {
   const target = m.to ? ` → ${m.to}` : '';
-  return `[${m.from}${target}] ${m.text}`;
+  // indent continuation lines — multi-line text must not forge a `[sender]` header
+  return `[${m.from}${target}] ${m.text.replace(/\n/g, '\n    ')}`;
 }
 
 function formatTask(t: Task): string {
