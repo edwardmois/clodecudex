@@ -97,7 +97,7 @@ describe('CodexAdapter.buildArgs', () => {
       '-c',
       'mcp_servers.hub.url="http://127.0.0.1:5000/hub/abc/codex"',
       '-c',
-      'mcp_servers.hub.default_tools_approval_mode="auto"',
+      'mcp_servers.hub.default_tools_approval_mode="approve"',
       '-',
     ]);
   });

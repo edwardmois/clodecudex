@@ -164,10 +164,12 @@ export class CodexAdapter implements AgentAdapter {
       this.options.cwd,
       '-c',
       `mcp_servers.hub.url=${JSON.stringify(this.options.hubUrl)}`,
-      // exec mode is non-interactive: without this, every hub tool call is
-      // auto-cancelled by the unanswerable approval prompt (openai/codex#16685)
+      // exec mode is non-interactive: anything short of "approve" elicits an
+      // unanswerable approval prompt and the call is auto-cancelled with
+      // "user cancelled MCP tool call" (openai/codex#16685, #24135).
+      // Verified live against codex-cli 0.142.5: "auto" cancels, "approve" runs.
       '-c',
-      'mcp_servers.hub.default_tools_approval_mode="auto"',
+      'mcp_servers.hub.default_tools_approval_mode="approve"',
     ];
     if (this.options.model) args.push('-m', this.options.model);
     if (this.sessionId) {
