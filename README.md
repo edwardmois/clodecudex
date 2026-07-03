@@ -33,6 +33,15 @@ Two live coding agents **coordinating through a shared task board** — not magi
 - **Two usage pools, one team.** Work splits across both subscriptions in parallel — roughly the sum of both plans' throughput, and about half the wall-clock on divisible tasks.
 - **Cross-model review is the real moat.** GPT and Claude have *different* blind spots. Every task gets checked by the model that didn't write it — something no amount of tokens from a single vendor buys.
 
+### How it compares
+
+Multi-agent coding tools come in two shapes today:
+
+- **Relay pipelines** (e.g. [Clodex](https://github.com/9thLevelSoftware/Clodex)) — fixed roles, taken in turns: one model plans, the other implements, both audit, a patch lands at the end. Rigorous, but sequential — you wait through every leg of the relay, and the agents never negotiate.
+- **Isolation managers** (e.g. Crystal/[Nimbalyst](https://nimbalyst.com/), [Composio AO](https://github.com/ComposioHQ/agent-orchestrator)) — many sessions, each walled into its own git worktree or PR. Parallel, but the agents work *apart*: no shared context, no cross-talk, and you merge the results yourself.
+
+`ccx` is the third shape: **both agents in the same working tree at the same time, negotiating the split themselves.** They divide your goal in chat ("I'll take the middleware, you take tests"), enforce the boundary with file ownership instead of worktree walls, and review each other before anything closes — while you sit in the room as the third founder. No patch to apply, no worktrees to merge: the repo you're looking at is the repo they're building.
+
 ### Honest token math
 
 Running two coordinated agents costs more total tokens than one agent doing everything (~1.3–1.6× in our design). `ccx` keeps the overhead down by design:
