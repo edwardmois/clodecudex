@@ -98,6 +98,12 @@ describe('CodexAdapter.buildArgs', () => {
       'mcp_servers.hub.url="http://127.0.0.1:5000/hub/abc/codex"',
       '-c',
       'mcp_servers.hub.default_tools_approval_mode="approve"',
+      '-c',
+      'model_reasoning_effort="medium"',
+      '-c',
+      'memories.use_memories=false',
+      '-c',
+      'memories.generate_memories=false',
       '-',
     ]);
   });

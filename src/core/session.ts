@@ -228,6 +228,7 @@ export class Session {
         cwd,
         hubUrl: this.hub.urlFor('codex'),
         sandbox: config.codex.sandbox,
+        reasoningEffort: config.codex.reasoningEffort,
         ...(config.codex.model ? { model: config.codex.model } : {}),
         ...(this.options.resume?.codexThreadId
           ? { resumeThreadId: this.options.resume.codexThreadId }

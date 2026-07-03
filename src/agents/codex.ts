@@ -10,6 +10,8 @@ export interface CodexAdapterOptions {
   sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
   /** Resume an earlier Codex thread (its own local history) by id. */
   resumeThreadId?: string;
+  /** Reasoning effort per turn; ccx defaults to "medium" for responsiveness. */
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   /** Override the executable, mainly for tests. */
   executable?: string;
 }
@@ -187,6 +189,16 @@ export class CodexAdapter implements AgentAdapter {
       // Verified live against codex-cli 0.142.5: "auto" cancels, "approve" runs.
       '-c',
       'mcp_servers.hub.default_tools_approval_mode="approve"',
+      // codex defaults to "high", which makes every turn slow; medium keeps
+      // the co-founder responsive (configurable via codex.reasoningEffort)
+      '-c',
+      `model_reasoning_effort="${this.options.reasoningEffort ?? 'medium'}"`,
+      // don't scan/inject/write the user's personal codex memories: the ccx
+      // bootstrap carries all needed context, and startup gets faster
+      '-c',
+      'memories.use_memories=false',
+      '-c',
+      'memories.generate_memories=false',
     ];
     if (this.options.model) args.push('-m', this.options.model);
     if (this.sessionId) {

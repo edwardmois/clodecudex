@@ -2,7 +2,7 @@
 
 > Two AI co-founders in one terminal. **Claude Code** and **OpenAI Codex CLI** working together on your codebase — live 3-way chat, a shared task board, cross-review by the model that didn't write the code. Runs on the subscriptions you already have. **Zero API keys.**
 
-**Status: v0.2.0 — early development.** See [CHANGELOG.md](CHANGELOG.md) for what's new.
+**Status: v0.3.0 — early development.** See [CHANGELOG.md](CHANGELOG.md) for what's new.
 
 ```
 [user]  add rate limiting to the API + tests
@@ -97,6 +97,7 @@ No database involved: both CLIs already persist their own conversation histories
   "codex": {
     "model": "gpt-5.2-codex",
     "sandbox": "workspace-write",
+    "reasoningEffort": "medium",
     "persona": "You lean testing, security, and code review."
   }
 }

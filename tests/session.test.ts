@@ -30,7 +30,7 @@ class FakeAdapter implements AgentAdapter {
 
 const config: CcxConfig = {
   claude: { persona: '', permissionMode: 'acceptEdits' },
-  codex: { persona: '', sandbox: 'workspace-write' },
+  codex: { persona: '', sandbox: 'workspace-write', reasoningEffort: 'medium' },
 };
 
 describe('Session', () => {

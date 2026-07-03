@@ -18,6 +18,12 @@ const CcxConfigSchema = z.object({
     sandbox: z
       .enum(['read-only', 'workspace-write', 'danger-full-access'])
       .default('workspace-write'),
+    /**
+     * Codex's own default is "high", which makes even trivial turns slow.
+     * "medium" is the responsiveness sweet spot for co-founder work; raise
+     * it per-project when depth matters more than latency.
+     */
+    reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high', 'xhigh']).default('medium'),
   }).prefault({}),
 });
 
