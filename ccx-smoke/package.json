@@ -1,8 +1,0 @@
-{
-  "name": "ccx-smoke",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test tests/slugify.test.js"
-  }
-}

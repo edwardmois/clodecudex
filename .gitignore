@@ -5,3 +5,4 @@ dist/
 FOUNDERS_NOTES.md
 .ccx/
 npm-debug.log*
+ccx-smoke/
