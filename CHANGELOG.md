@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0 — 2026-07-03
+
+- **`@file` mentions** — reference files in messages like in Claude Code: `fix the bug in @src/auth.ts`. Paths are validated before sending (typos error immediately), normalized, and both founders are told to read them. Contents aren't inlined — the agents read the files themselves, so nothing is paid for twice. `@claude` / `@codex` still address founders.
+
 ## 0.3.1 — 2026-07-03
 
 - **Consistent replies** — agents are now instructed that turn narration is invisible to their co-founder: anything meant for the user or the team goes through founders' chat (`[claude → user]`-style lines, journaled and resumable). Narration remains for private work-progress notes only.

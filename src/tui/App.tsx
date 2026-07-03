@@ -7,6 +7,7 @@ import type { AgentStatus } from '../agents/adapter.js';
 import { AGENT_NAMES, type AgentName, type Task } from '../core/types.js';
 import { HELP_TEXT, parseInput } from './commands.js';
 import { formatActivity, isNearDuplicate } from './format.js';
+import { expandFileMentions } from './mentions.js';
 import { formatTokens, formatWindow, readCodexRateLimits } from '../core/usage.js';
 
 const AGENT_COLORS: Record<string, string> = {
@@ -166,9 +167,19 @@ export function App({
       setInput('');
       const command = parseInput(raw);
       switch (command.type) {
-        case 'message':
-          session.postUserMessage(command.text, command.to);
+        case 'message': {
+          const expanded = expandFileMentions(command.text, process.cwd());
+          if (expanded.missing.length > 0) {
+            append(
+              item(`✗ file not found: ${expanded.missing.join(', ')} — message not sent`, {
+                color: 'red',
+              }),
+            );
+            break;
+          }
+          session.postUserMessage(expanded.text, command.to);
           break;
+        }
         case 'pause':
           session.pause(command.agent);
           setPausedAgents((prev) => new Set(prev).add(command.agent));
