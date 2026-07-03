@@ -6,6 +6,7 @@ import type { Session, SessionEvent } from '../core/session.js';
 import type { AgentStatus } from '../agents/adapter.js';
 import { AGENT_NAMES, type AgentName, type Task } from '../core/types.js';
 import { HELP_TEXT, parseInput } from './commands.js';
+import { formatActivity } from './format.js';
 
 const AGENT_COLORS: Record<string, string> = {
   user: 'white',
@@ -44,7 +45,13 @@ function taskGlyph(task: Task): string {
   return `${task.id} [${task.status}]${owner} ${task.title}`;
 }
 
-export function App({ session }: { session: Session }): React.JSX.Element {
+export function App({
+  session,
+  verbose = false,
+}: {
+  session: Session;
+  verbose?: boolean;
+}): React.JSX.Element {
   const { exit } = useApp();
   const [items, setItems] = useState<DisplayItem[]>(() => [
     item('ccx — two co-founders, one terminal. Type a goal, or /help.', {
@@ -80,9 +87,11 @@ export function App({ session }: { session: Session }): React.JSX.Element {
         case 'agent-message':
           append(item(`(${event.agent}) ${event.text}`, { color: AGENT_COLORS[event.agent], dim: true }));
           break;
-        case 'agent-activity':
-          append(item(`  ${event.agent}: ${event.text}`, { dim: true }));
+        case 'agent-activity': {
+          const line = formatActivity(event.text, verbose);
+          if (line !== undefined) append(item(`  ${event.agent}: ${line}`, { dim: true }));
           break;
+        }
         case 'file-change':
           append(item(`  ${event.agent} ${event.kind} ${event.path}`, { dim: true }));
           break;
@@ -97,6 +106,8 @@ export function App({ session }: { session: Session }): React.JSX.Element {
           break;
         case 'task-update':
           setTasks(session.board.listTasks());
+          // board changes are the plot: surface them inline, one line each
+          append(item(`  ✦ ${taskGlyph(event.task)}`, { color: 'yellow' }));
           break;
       }
     });

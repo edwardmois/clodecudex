@@ -24,8 +24,9 @@ program
   )
   .version(version)
   .option('--yolo', 'skip permission prompts for both agents (dangerous)', false)
+  .option('--verbose', 'show raw tool activity (hub calls, tool glyphs, full commands)', false)
   .option('--config <path>', 'path to a ccx config file')
-  .action(async (opts: { yolo: boolean; config?: string }) => {
+  .action(async (opts: { yolo: boolean; verbose: boolean; config?: string }) => {
     const { runDoctor, formatDoctorReport } = await import('./doctor.js');
     const results = await runDoctor(process.cwd());
     if (!results.every((r) => r.ok)) {
@@ -50,7 +51,9 @@ program
       import('ink'),
       import('./tui/App.js'),
     ]);
-    const app = render(React.createElement(App, { session }), { exitOnCtrlC: true });
+    const app = render(React.createElement(App, { session, verbose: opts.verbose }), {
+      exitOnCtrlC: true,
+    });
     await app.waitUntilExit();
     await session.stop();
   });
