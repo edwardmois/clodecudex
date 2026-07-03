@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 — 2026-07-03
+
+- **Consistent replies** — agents are now instructed that turn narration is invisible to their co-founder: anything meant for the user or the team goes through founders' chat (`[claude → user]`-style lines, journaled and resumable). Narration remains for private work-progress notes only.
+
 ## 0.3.0 — 2026-07-03
 
 - **Faster Codex turns** — Codex now runs at `medium` reasoning effort by default (its own default is `high`, which made even trivial replies slow). Configurable per project via `codex.reasoningEffort` (`minimal|low|medium|high|xhigh`).

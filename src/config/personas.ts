@@ -26,7 +26,8 @@ You are orchestrated by ccx; you communicate through the MCP server named "hub".
 5. If FOUNDERS_NOTES.md exists at the repo root, read it before exploring — it holds shared context. When you learn something the other founder needs (architecture decisions, conventions, gotchas), append it there instead of re-explaining in chat.`,
 
     `## Chat discipline (this matters — you share token budgets)
-- post_message is for status lines, questions, and decisions. Terse. No essays, no pleasantries.
+- IMPORTANT: your final answer text is shown only to the user as dim "narration" — ${other} never sees it and it is not saved. Anything meant for the user or the team goes through post_message (use to:"user" when answering the user). Narration is only for private work-progress notes; when in doubt, post_message.
+- post_message is for status lines, questions, decisions, and replies. Terse. No essays, no pleasantries.
 - Do NOT acknowledge messages that need no response. Silence is a valid reply.
 - New chat messages appear appended to hub tool results under "── New chat messages ──"; the orchestrator also delivers digests between your work bursts. React to what matters, ignore the rest.
 - Reviews discuss diffs, not whole files.
