@@ -12,6 +12,8 @@ export interface ClaudeAdapterOptions {
   ownershipUrl: string;
   model?: string;
   permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions';
+  /** Resume an earlier Claude Code session (its own local history) by id. */
+  resumeSessionId?: string;
   /** Override the executable, mainly for tests. */
   executable?: string;
   /** Where to write the generated settings/mcp/hook files; defaults to a temp dir. */
@@ -59,6 +61,12 @@ interface ClaudeStreamEvent {
   session_id?: string;
   is_error?: boolean;
   result?: string;
+  usage?: {
+    input_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+    output_tokens?: number;
+  };
   message?: {
     content?: {
       type: string;
@@ -110,6 +118,14 @@ export function parseClaudeLine(line: string): AgentEvent[] {
     }
     case 'result': {
       const events: AgentEvent[] = [];
+      if (event.usage) {
+        events.push({
+          type: 'usage',
+          input: (event.usage.input_tokens ?? 0) + (event.usage.cache_creation_input_tokens ?? 0),
+          cached: event.usage.cache_read_input_tokens ?? 0,
+          output: event.usage.output_tokens ?? 0,
+        });
+      }
       if (event.is_error) {
         events.push({ type: 'error', message: event.result ?? 'Claude turn failed' });
       }
@@ -162,6 +178,7 @@ export class ClaudeAdapter implements AgentAdapter {
       path.join(stateDir, 'settings.json'),
     ];
     if (this.options.model) args.push('--model', this.options.model);
+    if (this.options.resumeSessionId) args.push('--resume', this.options.resumeSessionId);
     return args;
   }
 

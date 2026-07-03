@@ -25,8 +25,9 @@ program
   .version(version)
   .option('--yolo', 'skip permission prompts for both agents (dangerous)', false)
   .option('--verbose', 'show raw tool activity (hub calls, tool glyphs, full commands)', false)
+  .option('--resume', 'continue the most recent ccx session in this project', false)
   .option('--config <path>', 'path to a ccx config file')
-  .action(async (opts: { yolo: boolean; verbose: boolean; config?: string }) => {
+  .action(async (opts: { yolo: boolean; verbose: boolean; resume: boolean; config?: string }) => {
     const { runDoctor, formatDoctorReport } = await import('./doctor.js');
     const results = await runDoctor(process.cwd());
     if (!results.every((r) => r.ok)) {
@@ -42,8 +43,29 @@ program
       config.codex.sandbox = 'danger-full-access';
     }
 
+    const { JournalWriter, journalDir, loadLatestJournal, newJournalPath } = await import(
+      './core/journal.js'
+    );
+    const dir = journalDir(process.cwd());
+    let resume;
+    let journalPath = newJournalPath(dir);
+    if (opts.resume) {
+      const latest = loadLatestJournal(dir);
+      if (!latest) {
+        console.error('No previous ccx session found in this project (.ccx/sessions is empty).');
+        process.exit(1);
+      }
+      resume = latest.data;
+      journalPath = latest.path; // keep appending to the same session
+    }
+
     const { Session } = await import('./core/session.js');
-    const session = new Session({ cwd: process.cwd(), config });
+    const session = new Session({
+      cwd: process.cwd(),
+      config,
+      journal: new JournalWriter(journalPath),
+      ...(resume ? { resume } : {}),
+    });
     await session.start();
 
     const [{ default: React }, { render }, { App }] = await Promise.all([

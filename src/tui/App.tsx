@@ -7,6 +7,7 @@ import type { AgentStatus } from '../agents/adapter.js';
 import { AGENT_NAMES, type AgentName, type Task } from '../core/types.js';
 import { HELP_TEXT, parseInput } from './commands.js';
 import { formatActivity } from './format.js';
+import { formatTokens, formatWindow, readCodexRateLimits } from '../core/usage.js';
 
 const AGENT_COLORS: Record<string, string> = {
   user: 'white',
@@ -53,12 +54,28 @@ export function App({
   verbose?: boolean;
 }): React.JSX.Element {
   const { exit } = useApp();
-  const [items, setItems] = useState<DisplayItem[]>(() => [
-    item('ccx — two co-founders, one terminal. Type a goal, or /help.', {
-      color: 'green',
-      bold: true,
-    }),
-  ]);
+  const [items, setItems] = useState<DisplayItem[]>(() => {
+    const initial = [
+      item('ccx — two co-founders, one terminal. Type a goal, or /help.', {
+        color: 'green',
+        bold: true,
+      }),
+    ];
+    if (session.resumed) {
+      const transcript = session.bus.transcript;
+      const openTasks = session.board.listTasks().filter((t) => t.status !== 'done');
+      initial.push(
+        item(
+          `↻ resumed previous session — ${transcript.length} messages, ${openTasks.length} open task(s)`,
+          { color: 'yellow' },
+        ),
+      );
+      for (const m of transcript.slice(-8)) {
+        initial.push(item(`[${m.from}${m.to ? ` → ${m.to}` : ''}] ${m.text}`, { dim: true }));
+      }
+    }
+    return initial;
+  });
   const [input, setInput] = useState('');
   const [statuses, setStatuses] = useState<Record<AgentName, AgentStatus>>({
     claude: 'starting',
@@ -150,6 +167,29 @@ export function App({
         case 'tasks': {
           const list = session.board.listTasks();
           append(item(list.length ? list.map(taskGlyph).join('\n') : 'Board is empty.', { dim: true }));
+          break;
+        }
+        case 'usage': {
+          const lines: string[] = ['token usage this session:'];
+          for (const agent of AGENT_NAMES) {
+            const u = session.usageOf(agent);
+            lines.push(
+              `  ${agent.padEnd(6)} in ${formatTokens(u.input)} · cached ${formatTokens(u.cached)} · out ${formatTokens(u.output)} · ${u.turns} turn(s)`,
+            );
+          }
+          const limits = readCodexRateLimits();
+          if (limits) {
+            const windows = [
+              formatWindow('5h', limits.primary),
+              formatWindow('weekly', limits.secondary),
+            ].filter((w): w is string => w !== undefined);
+            const plan = limits.plan_type ? ` (${limits.plan_type})` : '';
+            if (windows.length) lines.push(`codex subscription${plan}: ${windows.join(' · ')}`);
+          }
+          lines.push(
+            'claude subscription: not exposed by Claude Code yet (anthropics/claude-code#44328)',
+          );
+          append(item(lines.join('\n'), { dim: true }));
           break;
         }
         case 'diff':

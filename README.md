@@ -69,7 +69,19 @@ ccx doctor        # verify both CLIs are installed and logged in
 ccx               # start a session
 ```
 
-Then just type a goal. Slash commands: `/pause claude|codex`, `/resume`, `/tasks`, `/diff`, `/help`, `/quit`. Use `@claude …` / `@codex …` to address one founder.
+Then just type a goal. Slash commands: `/pause claude|codex`, `/resume claude|codex`, `/tasks`, `/usage`, `/diff`, `/help`, `/quit`. Use `@claude …` / `@codex …` to address one founder.
+
+### Usage tracking
+
+`/usage` shows each founder's token consumption this session, plus your Codex subscription windows (5-hour and weekly, read from Codex's own local session records — no network calls). Claude Code doesn't expose subscription limits programmatically yet ([anthropics/claude-code#44328](https://github.com/anthropics/claude-code/issues/44328)); its session tokens are still counted.
+
+### Resuming a session
+
+```bash
+ccx --resume   # continue the most recent session in this project
+```
+
+No database involved: both CLIs already persist their own conversation histories locally, so ccx only journals the shared state — the founders' chat, the task board, and the two session ids — to `.ccx/sessions/` in your project (add `.ccx/` to your `.gitignore`). On resume, both agents reattach to their existing conversations with full context, the board comes back with ownership intact, and the recent chat is replayed in the TUI.
 
 ## Configuration
 

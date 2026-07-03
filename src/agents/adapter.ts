@@ -13,6 +13,8 @@ export type AgentEvent =
   | { type: 'file-change'; path: string; kind: 'add' | 'edit' | 'delete' }
   /** The underlying session id became known (used for crash resume). */
   | { type: 'session'; id: string }
+  /** Token usage for one completed turn (both CLIs report this in-stream). */
+  | { type: 'usage'; input: number; cached: number; output: number }
   /** A unit of agent work finished; the adapter can accept the next delivery. */
   | { type: 'turn-complete' }
   | { type: 'error'; message: string };

@@ -50,6 +50,16 @@ export class TaskBoard {
     this.projectRoot = path.resolve(projectRoot);
   }
 
+  /** Preload tasks from a resumed session; keeps id numbering monotonic. */
+  restore(tasks: Task[]): void {
+    if (this.tasks.size > 0) throw new Error('Cannot restore into a non-empty board');
+    for (const task of tasks) {
+      this.tasks.set(task.id, { ...task, files: task.files.map(normalizeGlob) });
+      const n = Number(task.id.replace(/^T/i, ''));
+      if (Number.isFinite(n) && n >= this.nextId) this.nextId = n + 1;
+    }
+  }
+
   createTask(title: string, files: string[], createdBy: Participant): Task {
     const task: Task = {
       id: `T${this.nextId++}`,

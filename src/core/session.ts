@@ -1,7 +1,9 @@
 import { MessageBus } from './bus.js';
 import { TaskBoard } from './taskboard.js';
 import { FoundersHub } from '../hub/server.js';
-import { buildBootstrap } from '../config/personas.js';
+import { emptyTotals, type TokenTotals } from './usage.js';
+import type { JournalWriter, SessionJournalData } from './journal.js';
+import { buildBootstrap, buildResumeBrief } from '../config/personas.js';
 import { ClaudeAdapter } from '../agents/claude.js';
 import { CodexAdapter } from '../agents/codex.js';
 import type { AgentAdapter, AgentEvent, AgentStatus } from '../agents/adapter.js';
@@ -33,6 +35,10 @@ export interface SessionOptions {
   idleFlushMs?: number;
   /** How often to check for deadlock (both idle + open tasks). */
   nudgeIntervalMs?: number;
+  /** Persist chat/board/session-ids here as the session runs. */
+  journal?: JournalWriter;
+  /** Restore state from a previous session's journal. */
+  resume?: SessionJournalData;
 }
 
 const DEFAULT_IDLE_FLUSH_MS = 45_000;
@@ -71,6 +77,12 @@ export class Session {
   };
   private readonly paused = new Set<AgentName>();
   private readonly listeners = new Set<(event: SessionEvent) => void>();
+  private readonly usage: Record<AgentName, TokenTotals> = {
+    claude: emptyTotals(),
+    codex: emptyTotals(),
+  };
+  private readonly sessionIds: Partial<Record<AgentName, string>> = {};
+  private readonly startedAt = Date.now();
   private flushTimer: NodeJS.Timeout | undefined;
   private nudgeTimer: NodeJS.Timeout | undefined;
   private lastNudgeAt = 0;
@@ -81,14 +93,34 @@ export class Session {
     this.board = new TaskBoard(options.cwd);
     this.hub = new FoundersHub({ bus: this.bus, board: this.board });
 
+    if (options.resume) {
+      // agents catch up through their own CLI histories, not redelivery
+      this.bus.restore(options.resume.transcript, [...AGENT_NAMES]);
+      this.board.restore(options.resume.tasks);
+      if (options.resume.claudeSessionId) this.sessionIds.claude = options.resume.claudeSessionId;
+      if (options.resume.codexThreadId) this.sessionIds.codex = options.resume.codexThreadId;
+    }
+
     this.bus.onPost((message) => {
       this.emit({ type: 'chat', message });
+      this.saveJournal();
       // user posts and direct mentions wake idle recipients immediately
       for (const agent of AGENT_NAMES) {
         if (message.from === 'user' || message.to === agent) this.tryDeliver(agent, false);
       }
     });
-    this.board.onChange((task) => this.emit({ type: 'task-update', task }));
+    this.board.onChange((task) => {
+      this.emit({ type: 'task-update', task });
+      this.saveJournal();
+    });
+  }
+
+  get resumed(): boolean {
+    return this.options.resume !== undefined;
+  }
+
+  usageOf(agent: AgentName): TokenTotals {
+    return this.usage[agent];
   }
 
   async start(): Promise<void> {
@@ -105,9 +137,17 @@ export class Session {
       adapter.onEvent((event) => this.handleAgentEvent(agent, event));
     }
     const { config } = this.options;
+    const firstPrompt = (agent: AgentName, persona: string): string => {
+      if (!this.options.resume) return buildBootstrap(agent, persona);
+      const open = this.board
+        .listTasks()
+        .filter((t) => t.status !== 'done')
+        .map((t) => `${t.id} [${t.status}]${t.owner ? ` @${t.owner}` : ''} ${t.title}`);
+      return buildResumeBrief(agent, open);
+    };
     await Promise.all([
-      this.agents.claude.start(buildBootstrap('claude', config.claude.persona)),
-      this.agents.codex.start(buildBootstrap('codex', config.codex.persona)),
+      this.agents.claude.start(firstPrompt('claude', config.claude.persona)),
+      this.agents.codex.start(firstPrompt('codex', config.codex.persona)),
     ]);
 
     const flushMs = this.options.idleFlushMs ?? DEFAULT_IDLE_FLUSH_MS;
@@ -152,6 +192,8 @@ export class Session {
       await Promise.all(AGENT_NAMES.map((a) => this.agents?.[a].stop()));
     }
     await this.hub.stop();
+    this.saveJournal();
+    this.options.journal?.flush();
   }
 
   private createRealAdapters(): Record<AgentName, AgentAdapter> {
@@ -163,12 +205,18 @@ export class Session {
         ownershipUrl: this.hub.ownershipUrlFor('claude'),
         permissionMode: config.claude.permissionMode,
         ...(config.claude.model ? { model: config.claude.model } : {}),
+        ...(this.options.resume?.claudeSessionId
+          ? { resumeSessionId: this.options.resume.claudeSessionId }
+          : {}),
       }),
       codex: new CodexAdapter({
         cwd,
         hubUrl: this.hub.urlFor('codex'),
         sandbox: config.codex.sandbox,
         ...(config.codex.model ? { model: config.codex.model } : {}),
+        ...(this.options.resume?.codexThreadId
+          ? { resumeThreadId: this.options.resume.codexThreadId }
+          : {}),
       }),
     };
   }
@@ -204,9 +252,31 @@ export class Session {
         this.status[agent] = 'idle';
         this.tryDeliver(agent, true);
         break;
+      case 'usage': {
+        const totals = this.usage[agent];
+        totals.input += event.input;
+        totals.cached += event.cached;
+        totals.output += event.output;
+        totals.turns += 1;
+        break;
+      }
       case 'session':
+        this.sessionIds[agent] = event.id;
+        this.saveJournal();
         break;
     }
+  }
+
+  private saveJournal(): void {
+    this.options.journal?.schedule({
+      version: 1,
+      startedAt: this.options.resume?.startedAt ?? this.startedAt,
+      updatedAt: Date.now(),
+      ...(this.sessionIds.claude ? { claudeSessionId: this.sessionIds.claude } : {}),
+      ...(this.sessionIds.codex ? { codexThreadId: this.sessionIds.codex } : {}),
+      transcript: [...this.bus.transcript],
+      tasks: this.board.listTasks(),
+    });
   }
 
   /**

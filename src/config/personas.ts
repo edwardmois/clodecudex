@@ -38,3 +38,15 @@ You are orchestrated by ccx; you communicate through the MCP server named "hub".
 
   return sections.join('\n\n');
 }
+
+/**
+ * Sent instead of the full bootstrap when ccx reattaches to your existing
+ * CLI session after a restart — your own conversation history is intact,
+ * so this only restores the shared context you can't see: the board.
+ */
+export function buildResumeBrief(agent: AgentName, openTasks: string[]): string {
+  const board = openTasks.length
+    ? `Open tasks on the board:\n${openTasks.join('\n')}`
+    : 'The board has no open tasks.';
+  return `ccx session resumed after a restart. You are still "${agent}"; the coordination protocol and hub tools are unchanged, and your conversation history is intact. ${board}\nCall list_tasks if you need detail, post one short status line, and continue where you left off. If you owned a claimed task, re-verify its state on disk before resuming work.`;
+}

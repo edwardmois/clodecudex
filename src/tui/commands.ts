@@ -5,6 +5,7 @@ export type Command =
   | { type: 'pause'; agent: AgentName }
   | { type: 'resume'; agent: AgentName }
   | { type: 'tasks' }
+  | { type: 'usage' }
   | { type: 'diff' }
   | { type: 'help' }
   | { type: 'quit' }
@@ -15,10 +16,12 @@ export const HELP_TEXT = `Commands:
   /pause claude|codex            stop delivering work to a founder
   /resume claude|codex           resume a paused founder
   /tasks                         show the task board
+  /usage                         token usage + subscription windows
   /diff                          show the current git diff (local only)
   /help                          this help
   /quit                          end the session
-Anything else is posted to the founders' chat.`;
+Anything else is posted to the founders' chat.
+Start with \`ccx --resume\` to continue the previous session in this project.`;
 
 function parseAgent(raw: string | undefined): AgentName | undefined {
   return AGENT_NAMES.find((a) => a === raw?.toLowerCase());
@@ -50,6 +53,8 @@ export function parseInput(raw: string): Command {
     }
     case 'tasks':
       return { type: 'tasks' };
+    case 'usage':
+      return { type: 'usage' };
     case 'diff':
       return { type: 'diff' };
     case 'help':

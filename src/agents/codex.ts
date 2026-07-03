@@ -8,6 +8,8 @@ export interface CodexAdapterOptions {
   model?: string;
   /** Codex sandbox policy; defaults to workspace-write. */
   sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
+  /** Resume an earlier Codex thread (its own local history) by id. */
+  resumeThreadId?: string;
   /** Override the executable, mainly for tests. */
   executable?: string;
 }
@@ -17,6 +19,7 @@ interface CodexStreamEvent {
   type: string;
   thread_id?: string;
   message?: string;
+  usage?: { input_tokens?: number; cached_input_tokens?: number; output_tokens?: number };
   item?: {
     id: string;
     type: string;
@@ -56,8 +59,21 @@ export function parseCodexLine(line: string): AgentEvent[] {
       return event.thread_id ? [{ type: 'session', id: event.thread_id }] : [];
     case 'turn.started':
       return [{ type: 'status', status: 'working' }];
-    case 'turn.completed':
-      return [{ type: 'status', status: 'idle' }, { type: 'turn-complete' }];
+    case 'turn.completed': {
+      const events: AgentEvent[] = [];
+      if (event.usage) {
+        // codex input_tokens INCLUDES the cached portion; report them apart
+        const cached = event.usage.cached_input_tokens ?? 0;
+        events.push({
+          type: 'usage',
+          input: Math.max(0, (event.usage.input_tokens ?? 0) - cached),
+          cached,
+          output: event.usage.output_tokens ?? 0,
+        });
+      }
+      events.push({ type: 'status', status: 'idle' }, { type: 'turn-complete' });
+      return events;
+    }
     case 'turn.failed':
       return [
         { type: 'error', message: event.message ?? 'Codex turn failed' },
@@ -123,6 +139,7 @@ export class CodexAdapter implements AgentAdapter {
 
   constructor(options: CodexAdapterOptions) {
     this.options = options;
+    this.sessionId = options.resumeThreadId;
   }
 
   async start(bootstrap: string): Promise<void> {

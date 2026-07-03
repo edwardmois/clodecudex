@@ -156,6 +156,13 @@ describe('Session', () => {
     session.bus.drainFor('codex');
   });
 
+  it('accumulates token usage per agent', () => {
+    claude.fire({ type: 'usage', input: 100, cached: 4000, output: 50 });
+    claude.fire({ type: 'usage', input: 20, cached: 1000, output: 5 });
+    expect(session.usageOf('claude')).toEqual({ input: 120, cached: 5000, output: 55, turns: 2 });
+    expect(session.usageOf('codex').turns).toBe(0);
+  });
+
   it('surfaces agent errors as session events', () => {
     codex.fire({ type: 'error', message: 'usage limit reached' });
     expect(events).toContainEqual({
@@ -163,5 +170,51 @@ describe('Session', () => {
       agent: 'codex',
       message: 'usage limit reached',
     });
+  });
+});
+
+describe('Session resume', () => {
+  it('restores chat/board, briefs instead of bootstrapping, redelivers nothing', async () => {
+    vi.useFakeTimers();
+    const claude = new FakeAdapter('claude');
+    const codex = new FakeAdapter('codex');
+    const session = new Session({
+      cwd: '/repo',
+      config,
+      createAdapters: () => ({ claude, codex }),
+      resume: {
+        version: 1,
+        startedAt: 1,
+        updatedAt: 2,
+        claudeSessionId: 'cs-1',
+        codexThreadId: 'th-1',
+        transcript: [{ id: 'm1', from: 'user', text: 'old goal', at: 1 }],
+        tasks: [
+          {
+            id: 'T1',
+            title: 'auth',
+            files: ['src/**'],
+            status: 'claimed',
+            owner: 'claude',
+            createdBy: 'user',
+          },
+        ],
+      },
+    });
+    await session.start();
+
+    expect(session.resumed).toBe(true);
+    expect(claude.bootstrap).toContain('resumed');
+    expect(claude.bootstrap).toContain('T1 [claimed] @claude auth');
+    expect(codex.bootstrap).not.toContain('co-founders sharing this workspace'); // no full bootstrap
+    // restored history is not redelivered as a digest
+    vi.advanceTimersByTime(60_000);
+    expect(claude.delivered).toHaveLength(0);
+    // board is live: ownership still enforced, ids continue
+    expect(session.board.canEdit('codex', 'src/auth/x.ts')).toBe(false);
+    expect(session.board.createTask('next', [], 'user').id).toBe('T2');
+
+    await session.stop();
+    vi.useRealTimers();
   });
 });

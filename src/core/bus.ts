@@ -44,6 +44,17 @@ export class MessageBus {
     return this.messages;
   }
 
+  /**
+   * Preload a transcript from a resumed session. `caughtUp` participants
+   * (typically both agents — their own CLIs remember the conversation) start
+   * with their cursor past the restored history so nothing is redelivered.
+   */
+  restore(messages: ChatMessage[], caughtUp: Participant[]): void {
+    if (this.messages.length > 0) throw new Error('Cannot restore into a non-empty bus');
+    this.messages.push(...messages);
+    for (const participant of caughtUp) this.cursors.set(participant, this.messages.length);
+  }
+
   post(input: PostInput): ChatMessage {
     const message: ChatMessage = {
       id: randomUUID(),
