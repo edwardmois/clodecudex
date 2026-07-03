@@ -102,7 +102,9 @@ No database involved: both CLIs already persist their own conversation histories
 }
 ```
 
-Everything is optional — defaults are sensible and safe. `--yolo` disables both agents' permission prompts (use in disposable environments only).
+Everything is optional — defaults are sensible and safe. `--claude-model` / `--codex-model` override the models for one run. `--yolo` disables both agents' permission prompts (use in disposable environments only).
+
+When a founder runs out of subscription quota mid-session, ccx pauses it automatically (one clear message, no error spam) and the other founder keeps working — `/resume` it once the limit resets.
 
 ## Safety model
 

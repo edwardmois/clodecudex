@@ -24,7 +24,9 @@ export type SessionEvent =
   | { type: 'file-change'; agent: AgentName; path: string; kind: 'add' | 'edit' | 'delete' }
   | { type: 'task-update'; task: Task }
   | { type: 'violation'; agent: AgentName; path: string }
-  | { type: 'agent-error'; agent: AgentName; message: string };
+  | { type: 'agent-error'; agent: AgentName; message: string }
+  /** A founder ran out of subscription quota and was auto-paused. */
+  | { type: 'agent-limit'; agent: AgentName; message: string };
 
 export interface SessionOptions {
   cwd: string;
@@ -43,6 +45,17 @@ export interface SessionOptions {
 
 const DEFAULT_IDLE_FLUSH_MS = 45_000;
 const DEFAULT_NUDGE_INTERVAL_MS = 90_000;
+
+/**
+ * Recognize "you're out of quota" errors from either CLI, e.g.
+ * "You've hit your session limit · resets 10:10pm" (claude) or
+ * rate/usage-limit errors from codex.
+ */
+export function isUsageLimitError(message: string): boolean {
+  return /(hit your .{0,20}limit|(usage|session|rate|weekly).{0,10}limit (reached|exceeded)|rate.?limited|too many requests|\b429\b)/i.test(
+    message,
+  );
+}
 
 function formatDigest(messages: ChatMessage[]): string {
   // Continuation lines are indented so multi-line text can never forge a
@@ -76,6 +89,7 @@ export class Session {
     codex: 'starting',
   };
   private readonly paused = new Set<AgentName>();
+  private readonly limitPaused = new Set<AgentName>();
   private readonly listeners = new Set<(event: SessionEvent) => void>();
   private readonly usage: Record<AgentName, TokenTotals> = {
     claude: emptyTotals(),
@@ -169,6 +183,7 @@ export class Session {
 
   resume(agent: AgentName): void {
     this.paused.delete(agent);
+    this.limitPaused.delete(agent);
     this.tryDeliver(agent, true);
   }
 
@@ -246,6 +261,19 @@ export class Session {
         }
         break;
       case 'error':
+        if (isUsageLimitError(event.message)) {
+          // one announcement, then silence — every delivery would re-fail
+          if (!this.limitPaused.has(agent)) {
+            this.limitPaused.add(agent);
+            this.paused.add(agent);
+            this.emit({ type: 'agent-limit', agent, message: event.message });
+            this.bus.post({
+              from: 'system',
+              text: `${agent} hit its subscription usage limit and is paused (${event.message}). The team continues without ${agent}; the user can /resume ${agent} once the limit resets.`,
+            });
+          }
+          break;
+        }
         this.emit({ type: 'agent-error', agent, message: event.message });
         break;
       case 'turn-complete':

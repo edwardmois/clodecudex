@@ -30,7 +30,8 @@ You are orchestrated by ccx; you communicate through the MCP server named "hub".
 - Do NOT acknowledge messages that need no response. Silence is a valid reply.
 - New chat messages appear appended to hub tool results under "── New chat messages ──"; the orchestrator also delivers digests between your work bursts. React to what matters, ignore the rest.
 - Reviews discuss diffs, not whole files.
-- End each work burst with one short status via post_message so the team knows where things stand.`,
+- End each work burst with one short status via post_message so the team knows where things stand. Do not then repeat that status in your final answer — one or the other, never both.
+- During startup/bootstrap (before the user posts a goal): total silence. No greeting, no setup narration, no "ready" post. Your first output happens when there is real work to react to.`,
   ];
 
   if (persona) sections.push(`## Your persona\n${persona}`);

@@ -18,6 +18,24 @@ function clamp(text: string, max: number): string {
  * - successful `hub → tool` calls (the resulting chat/task update is shown)
  * Warnings (⚠ …) always survive, clamped.
  */
+/**
+ * The same content often arrives twice: an agent's chat post followed by its
+ * turn-ending narration, or an error surfaced both as a message and as the
+ * turn result. Treat one containing the other (after normalization) as a
+ * duplicate not worth printing again.
+ */
+export function isNearDuplicate(a: string | undefined, b: string | undefined): boolean {
+  if (!a || !b) return false;
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (na.length < 12 || nb.length < 12) return na === nb;
+  return na.includes(nb) || nb.includes(na);
+}
+
+function normalize(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
 export function formatActivity(text: string, verbose: boolean): string | undefined {
   if (verbose) return text;
   if (text.startsWith('⚒')) return undefined;

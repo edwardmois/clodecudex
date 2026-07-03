@@ -164,12 +164,38 @@ describe('Session', () => {
   });
 
   it('surfaces agent errors as session events', () => {
-    codex.fire({ type: 'error', message: 'usage limit reached' });
+    codex.fire({ type: 'error', message: 'spawn failed unexpectedly' });
     expect(events).toContainEqual({
       type: 'agent-error',
       agent: 'codex',
-      message: 'usage limit reached',
+      message: 'spawn failed unexpectedly',
     });
+  });
+
+  it('auto-pauses a founder that hits its usage limit, announcing exactly once', () => {
+    const limitMsg = "You've hit your session limit · resets 10:10pm (Asia/Jerusalem)";
+    claude.fire({ type: 'error', message: limitMsg });
+    claude.fire({ type: 'error', message: limitMsg });
+    claude.fire({ type: 'error', message: limitMsg });
+
+    expect(session.isPaused('claude')).toBe(true);
+    expect(events.filter((e) => e.type === 'agent-limit')).toHaveLength(1);
+    expect(events.filter((e) => e.type === 'agent-error')).toHaveLength(0);
+    const systemPosts = events.filter(
+      (e) => e.type === 'chat' && e.message.from === 'system' && /limit/i.test(e.message.text),
+    );
+    expect(systemPosts).toHaveLength(1);
+
+    // paused: user messages are not delivered to claude
+    claude.delivered.length = 0;
+    session.postUserMessage('hello?');
+    expect(claude.delivered).toHaveLength(0);
+    expect(codex.delivered.length).toBeGreaterThan(0);
+
+    // /resume clears the limit pause and flushes pending chat
+    session.resume('claude');
+    expect(session.isPaused('claude')).toBe(false);
+    expect(claude.delivered.length).toBeGreaterThan(0);
   });
 });
 

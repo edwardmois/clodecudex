@@ -6,7 +6,7 @@ import type { Session, SessionEvent } from '../core/session.js';
 import type { AgentStatus } from '../agents/adapter.js';
 import { AGENT_NAMES, type AgentName, type Task } from '../core/types.js';
 import { HELP_TEXT, parseInput } from './commands.js';
-import { formatActivity } from './format.js';
+import { formatActivity, isNearDuplicate } from './format.js';
 import { formatTokens, formatWindow, readCodexRateLimits } from '../core/usage.js';
 
 const AGENT_COLORS: Record<string, string> = {
@@ -29,7 +29,8 @@ function item(text: string, opts: Partial<DisplayItem> = {}): DisplayItem {
   return { id: nextItemId++, text, ...opts };
 }
 
-function statusGlyph(status: AgentStatus, paused: boolean): string {
+function statusGlyph(status: AgentStatus, paused: boolean, limited: boolean): string {
+  if (limited) return '⛔ limit';
   if (paused) return '⏸ paused';
   switch (status) {
     case 'working':
@@ -82,7 +83,10 @@ export function App({
     codex: 'starting',
   });
   const [pausedAgents, setPausedAgents] = useState<Set<AgentName>>(new Set());
+  const [limitedAgents, setLimitedAgents] = useState<Set<AgentName>>(new Set());
   const [tasks, setTasks] = useState<Task[]>([]);
+  // last thing each agent said (chat or narration), for duplicate suppression
+  const lastSaid = React.useRef<Partial<Record<AgentName, string>>>({});
 
   const append = useCallback((entry: DisplayItem) => {
     setItems((prev) => [...prev, entry]);
@@ -93,6 +97,7 @@ export function App({
       switch (event.type) {
         case 'chat': {
           const { from, to, text } = event.message;
+          if (from === 'claude' || from === 'codex') lastSaid.current[from] = text;
           append(
             item(`[${from}${to ? ` → ${to}` : ''}] ${text}`, {
               color: AGENT_COLORS[from] ?? 'white',
@@ -101,9 +106,12 @@ export function App({
           );
           break;
         }
-        case 'agent-message':
+        case 'agent-message': {
+          if (isNearDuplicate(event.text, lastSaid.current[event.agent])) break;
+          lastSaid.current[event.agent] = event.text;
           append(item(`(${event.agent}) ${event.text}`, { color: AGENT_COLORS[event.agent], dim: true }));
           break;
+        }
         case 'agent-activity': {
           const line = formatActivity(event.text, verbose);
           if (line !== undefined) append(item(`  ${event.agent}: ${line}`, { dim: true }));
@@ -116,7 +124,18 @@ export function App({
           append(item(`⚠ OWNERSHIP: ${event.agent} touched ${event.path}`, { color: 'red', bold: true }));
           break;
         case 'agent-error':
+          if (isNearDuplicate(event.message, lastSaid.current[event.agent])) break;
           append(item(`✗ ${event.agent}: ${event.message}`, { color: 'red' }));
+          break;
+        case 'agent-limit':
+          setLimitedAgents((prev) => new Set(prev).add(event.agent));
+          setPausedAgents((prev) => new Set(prev).add(event.agent));
+          append(
+            item(
+              `⛔ ${event.agent} is out of usage (${event.message}) — paused. /resume ${event.agent} once it resets; the other founder keeps working.`,
+              { color: 'yellow', bold: true },
+            ),
+          );
           break;
         case 'agent-status':
           setStatuses((prev) => ({ ...prev, [event.agent]: event.status }));
@@ -158,6 +177,11 @@ export function App({
         case 'resume':
           session.resume(command.agent);
           setPausedAgents((prev) => {
+            const next = new Set(prev);
+            next.delete(command.agent);
+            return next;
+          });
+          setLimitedAgents((prev) => {
             const next = new Set(prev);
             next.delete(command.agent);
             return next;
@@ -225,7 +249,7 @@ export function App({
         <Box gap={3}>
           {AGENT_NAMES.map((agent) => (
             <Text key={agent} color={AGENT_COLORS[agent]}>
-              {agent} {statusGlyph(statuses[agent], pausedAgents.has(agent))}
+              {agent} {statusGlyph(statuses[agent], pausedAgents.has(agent), limitedAgents.has(agent))}
             </Text>
           ))}
           <Text dimColor>

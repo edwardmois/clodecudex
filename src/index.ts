@@ -26,8 +26,17 @@ program
   .option('--yolo', 'skip permission prompts for both agents (dangerous)', false)
   .option('--verbose', 'show raw tool activity (hub calls, tool glyphs, full commands)', false)
   .option('--resume', 'continue the most recent ccx session in this project', false)
+  .option('--claude-model <model>', 'model for the Claude founder (e.g. sonnet, opus)')
+  .option('--codex-model <model>', 'model for the Codex founder (e.g. gpt-5.2-codex)')
   .option('--config <path>', 'path to a ccx config file')
-  .action(async (opts: { yolo: boolean; verbose: boolean; resume: boolean; config?: string }) => {
+  .action(async (opts: {
+    yolo: boolean;
+    verbose: boolean;
+    resume: boolean;
+    claudeModel?: string;
+    codexModel?: string;
+    config?: string;
+  }) => {
     const { runDoctor, formatDoctorReport } = await import('./doctor.js');
     const results = await runDoctor(process.cwd());
     if (!results.every((r) => r.ok)) {
@@ -42,6 +51,8 @@ program
       config.claude.permissionMode = 'bypassPermissions';
       config.codex.sandbox = 'danger-full-access';
     }
+    if (opts.claudeModel) config.claude.model = opts.claudeModel;
+    if (opts.codexModel) config.codex.model = opts.codexModel;
 
     const { JournalWriter, journalDir, loadLatestJournal, newJournalPath } = await import(
       './core/journal.js'
