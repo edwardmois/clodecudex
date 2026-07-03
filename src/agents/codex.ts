@@ -74,8 +74,13 @@ export function parseCodexLine(line: string): AgentEvent[] {
           return item.text ? [{ type: 'message', text: item.text }] : [];
         case 'command_execution':
           return item.command ? [{ type: 'activity', text: `$ ${item.command}` }] : [];
-        case 'mcp_tool_call':
-          return item.tool ? [{ type: 'activity', text: `hub → ${item.tool}` }] : [];
+        case 'mcp_tool_call': {
+          if (!item.tool) return [];
+          const ok = item.status === undefined || item.status === 'completed';
+          return [
+            { type: 'activity', text: ok ? `hub → ${item.tool}` : `⚠ hub → ${item.tool} ${item.status}` },
+          ];
+        }
         case 'file_change':
           return (item.changes ?? []).map((change) => ({
             type: 'file-change' as const,
@@ -91,6 +96,12 @@ export function parseCodexLine(line: string): AgentEvent[] {
     default:
       return [];
   }
+}
+
+/** Quote a single argument for a Windows shell command line (spaces only —
+ * our generated args never contain cmd metacharacters). */
+function quoteForShell(arg: string): string {
+  return /\s/.test(arg) ? `"${arg}"` : arg;
 }
 
 /**
@@ -153,6 +164,10 @@ export class CodexAdapter implements AgentAdapter {
       this.options.cwd,
       '-c',
       `mcp_servers.hub.url=${JSON.stringify(this.options.hubUrl)}`,
+      // exec mode is non-interactive: without this, every hub tool call is
+      // auto-cancelled by the unanswerable approval prompt (openai/codex#16685)
+      '-c',
+      'mcp_servers.hub.default_tools_approval_mode="auto"',
     ];
     if (this.options.model) args.push('-m', this.options.model);
     if (this.sessionId) {
@@ -167,13 +182,22 @@ export class CodexAdapter implements AgentAdapter {
     this.busy = true;
     this.emit({ type: 'status', status: 'working' });
 
-    const executable =
-      this.options.executable ?? (process.platform === 'win32' ? 'codex.cmd' : 'codex');
-    const child = spawn(executable, this.buildArgs(), {
-      cwd: this.options.cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: process.platform === 'win32',
-    });
+    // On Windows the real `codex` is a .cmd shim, which only runs through a
+    // shell. Passing an args array alongside shell:true is deprecated
+    // (DEP0190), so we assemble the command line ourselves with space-safe
+    // quoting. Elsewhere (and for test overrides) spawn directly, no shell.
+    const args = this.buildArgs();
+    const child =
+      this.options.executable === undefined && process.platform === 'win32'
+        ? spawn(['codex.cmd', ...args.map(quoteForShell)].join(' '), {
+            cwd: this.options.cwd,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            shell: true,
+          })
+        : spawn(this.options.executable ?? 'codex', args, {
+            cwd: this.options.cwd,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
     this.child = child;
 
     child.stdin?.end(prompt);

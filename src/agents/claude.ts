@@ -282,6 +282,9 @@ export class ClaudeAdapter implements AgentAdapter {
       path.join(stateDir, 'settings.json'),
       JSON.stringify(
         {
+          // Headless mode cannot answer permission prompts: pre-allow every
+          // hub coordination tool ("mcp__hub" = all tools on that server).
+          permissions: { allow: ['mcp__hub'] },
           hooks: {
             PreToolUse: [
               {

@@ -96,6 +96,22 @@ describe('ClaudeAdapter.buildArgs', () => {
   });
 });
 
+describe('ClaudeAdapter state files', () => {
+  it('pre-allows all hub tools — headless mode cannot answer permission prompts', () => {
+    const adapter = new ClaudeAdapter({
+      cwd: 'D:/proj',
+      hubUrl: 'http://127.0.0.1:5000/hub/abc/claude',
+      ownershipUrl: 'http://127.0.0.1:5000/hub/abc/claude/ownership',
+    });
+    const stateDir = mkdtempSync(path.join(tmpdir(), 'ccx-state-'));
+    (adapter as unknown as { writeStateFiles(dir: string): void }).writeStateFiles(stateDir);
+    const settings = JSON.parse(readFileSync(path.join(stateDir, 'settings.json'), 'utf8')) as {
+      permissions?: { allow?: string[] };
+    };
+    expect(settings.permissions?.allow).toContain('mcp__hub');
+  });
+});
+
 describe('ownership hook end-to-end', () => {
   let bus: MessageBus;
   let board: TaskBoard;
