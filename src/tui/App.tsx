@@ -8,6 +8,7 @@ import { AGENT_NAMES, type AgentName, type Task } from '../core/types.js';
 import { HELP_TEXT, parseInput } from './commands.js';
 import { formatActivity, isNearDuplicate } from './format.js';
 import { expandFileMentions } from './mentions.js';
+import { FileIndex, applyCompletion, extractMentionQuery, rankCompletions } from './completion.js';
 import { formatTokens, formatWindow, readCodexRateLimits } from '../core/usage.js';
 
 const AGENT_COLORS: Record<string, string> = {
@@ -88,6 +89,29 @@ export function App({
   const [tasks, setTasks] = useState<Task[]>([]);
   // last thing each agent said (chat or narration), for duplicate suppression
   const lastSaid = React.useRef<Partial<Record<AgentName, string>>>({});
+  // @-mention autocomplete: menu entries, highlighted row, Esc-dismissal marker
+  const fileIndex = useMemo(() => new FileIndex(process.cwd()), []);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [selected, setSelected] = useState(0);
+  const dismissedFor = React.useRef<string | undefined>(undefined);
+  const mention = useMemo(() => extractMentionQuery(input), [input]);
+
+  useEffect(() => {
+    if (dismissedFor.current !== input) dismissedFor.current = undefined;
+    if (!mention || dismissedFor.current === input) {
+      setSuggestions([]);
+      setSelected(0);
+      return;
+    }
+    // at the start of a line, @ can also address a founder
+    const agents =
+      mention.start === 0
+        ? AGENT_NAMES.filter((a) => a.startsWith(mention.query.toLowerCase()))
+        : [];
+    const files = rankCompletions(mention.query, fileIndex.candidates(), 8 - agents.length);
+    setSuggestions([...agents, ...files]);
+    setSelected(0);
+  }, [input, mention, fileIndex]);
 
   const append = useCallback((entry: DisplayItem) => {
     setItems((prev) => [...prev, entry]);
@@ -186,8 +210,30 @@ export function App({
     [session, append],
   );
 
-  // Esc interrupts whoever is mid-turn, like in Claude Code
+  // Tab/↑/↓/Esc drive the @-completion menu (ink-text-input ignores these
+  // keys, so they fall through to us); Esc with no menu open interrupts
+  // whoever is mid-turn, like in Claude Code.
   useInput((_input, key) => {
+    if (suggestions.length > 0 && mention) {
+      if (key.tab) {
+        const pick = suggestions[selected];
+        if (pick !== undefined) setInput(applyCompletion(input, mention, pick));
+        return;
+      }
+      if (key.downArrow) {
+        setSelected((s) => (s + 1) % suggestions.length);
+        return;
+      }
+      if (key.upArrow) {
+        setSelected((s) => (s - 1 + suggestions.length) % suggestions.length);
+        return;
+      }
+      if (key.escape) {
+        dismissedFor.current = input;
+        setSuggestions([]);
+        return;
+      }
+    }
     if (key.escape) stopAgents(undefined, true);
   });
 
@@ -304,6 +350,18 @@ export function App({
           <TextInput value={input} onChange={setInput} onSubmit={submit} />
         </Box>
       </Box>
+
+      {suggestions.length > 0 && (
+        <Box flexDirection="column" paddingLeft={2}>
+          {suggestions.map((entry, i) => (
+            <Text key={entry} color={i === selected ? 'green' : undefined} dimColor={i !== selected}>
+              {i === selected ? '▸ ' : '  '}
+              {entry}
+            </Text>
+          ))}
+          <Text dimColor>tab complete · ↑↓ move · esc dismiss</Text>
+        </Box>
+      )}
     </Box>
   );
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0 — 2026-07-04
+
+- **`@` autocomplete** — typing `@` opens a live suggestion menu of project files *and* folders under the input (plus `claude`/`codex` at the start of a line). `Tab` completes, `↑`/`↓` move, `Esc` dismisses (interrupting founders stays on `Esc` when no menu is open). Directory completions stay open so you can keep drilling in; paths with spaces are quoted automatically. The list comes from `git ls-files` (tracked + untracked, `.gitignore` respected) with a bounded directory walk as fallback outside git repos, cached so typing never touches the disk.
+
 ## 0.5.0 — 2026-07-04
 
 - **Esc to interrupt** — press Esc to stop whatever the founders are doing mid-turn, like in Claude Code. Claude gets the stream-json interrupt control request (its session process stays alive); Codex's turn process is stopped (its thread survives and resumes on the next message). Context is kept on both sides, and chat that queued up while they worked is held back so your next message is heard first.

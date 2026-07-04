@@ -2,7 +2,7 @@
 
 > Two AI co-founders in one terminal. **Claude Code** and **OpenAI Codex CLI** working together on your codebase — live 3-way chat, a shared task board, cross-review by the model that didn't write the code. Runs on the subscriptions you already have. **Zero API keys.**
 
-**Status: v0.5.0 — early development.** See [CHANGELOG.md](CHANGELOG.md) for what's new.
+**Status: v0.6.0 — early development.** See [CHANGELOG.md](CHANGELOG.md) for what's new.
 
 ```
 [user]  add rate limiting to the API + tests
@@ -69,7 +69,7 @@ ccx doctor        # verify both CLIs are installed and logged in
 ccx               # start a session
 ```
 
-Then just type a goal. Slash commands: `/pause claude|codex`, `/resume claude|codex`, `/stop [claude|codex]`, `/tasks`, `/usage`, `/diff`, `/help`, `/quit`. Use `@claude …` / `@codex …` to address one founder, and `@path/to/file` to reference files (validated, both founders read them). Press **Esc** to interrupt whoever is mid-turn — both founders keep their context, and your next message goes first.
+Then just type a goal. Slash commands: `/pause claude|codex`, `/resume claude|codex`, `/stop [claude|codex]`, `/tasks`, `/usage`, `/diff`, `/help`, `/quit`. Use `@claude …` / `@codex …` to address one founder, and `@path/to/file` to reference files (validated, both founders read them) — typing `@` opens an autocomplete menu of project files and folders (`Tab` completes, `↑↓` move, `Esc` dismisses). Press **Esc** to interrupt whoever is mid-turn — both founders keep their context, and your next message goes first.
 
 ### Usage tracking
 
