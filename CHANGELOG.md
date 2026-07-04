@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1 — 2026-07-04
+
+- **Enter accepts the highlighted completion** while the `@` menu is open (it used to submit the raw text, producing `unknown founder "@"`). Tab still works; a second Enter sends the message.
+- **Autocomplete now works in gitignored folders** — a cwd that is entirely ignored by the parent repo (like a scratch/smoke folder) made `git ls-files` return nothing; the file index now falls back to the directory walk in that case.
+
 ## 0.6.0 — 2026-07-04
 
 - **`@` autocomplete** — typing `@` opens a live suggestion menu of project files *and* folders under the input (plus `claude`/`codex` at the start of a line). `Tab` completes, `↑`/`↓` move, `Esc` dismisses (interrupting founders stays on `Esc` when no menu is open). Directory completions stay open so you can keep drilling in; paths with spaces are quoted automatically. The list comes from `git ls-files` (tracked + untracked, `.gitignore` respected) with a bounded directory walk as fallback outside git repos, cached so typing never touches the disk.

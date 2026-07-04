@@ -239,6 +239,14 @@ export function App({
 
   const submit = useCallback(
     (raw: string) => {
+      // Enter with the completion menu open accepts the highlighted entry
+      if (suggestions.length > 0 && mention) {
+        const pick = suggestions[selected];
+        if (pick !== undefined) {
+          setInput(applyCompletion(raw, mention, pick));
+          return;
+        }
+      }
       setInput('');
       const command = parseInput(raw);
       switch (command.type) {
@@ -319,7 +327,7 @@ export function App({
           break;
       }
     },
-    [session, append, exit, showDiff, stopAgents],
+    [session, append, exit, showDiff, stopAgents, suggestions, mention, selected],
   );
 
   const openTasks = useMemo(() => tasks.filter((t) => t.status !== 'done'), [tasks]);
@@ -359,7 +367,7 @@ export function App({
               {entry}
             </Text>
           ))}
-          <Text dimColor>tab complete · ↑↓ move · esc dismiss</Text>
+          <Text dimColor>enter/tab complete · ↑↓ move · esc dismiss</Text>
         </Box>
       )}
     </Box>

@@ -15,7 +15,7 @@ export type Command =
 export const HELP_TEXT = `Commands:
   @claude <msg> / @codex <msg>   message one founder directly
   @path/to/file                  reference a file in a message (validated, both founders told to read it)
-                                 type @ and use Tab / ↑↓ to autocomplete files and folders
+                                 type @ and use Enter/Tab + ↑↓ to autocomplete files and folders
   /pause claude|codex            stop delivering work to a founder
   /resume claude|codex           resume a paused founder
   /stop [claude|codex]           interrupt in-flight work (Esc does the same for both)

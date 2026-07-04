@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -100,6 +101,17 @@ describe('FileIndex', () => {
     expect(entries).toContain('src/auth/jwt.ts');
     expect(entries).toContain('README.md');
     expect(entries.some((e) => e.includes('node_modules'))).toBe(false);
+  });
+
+  it('falls back to the walk when git lists nothing (fully gitignored cwd)', () => {
+    // e.g. a scratch folder that is itself in the parent repo's .gitignore
+    const root = mkdtempSync(path.join(tmpdir(), 'ccx-completion-'));
+    spawnSync('git', ['init'], { cwd: root });
+    writeFileSync(path.join(root, '.gitignore'), '*\n');
+    writeFileSync(path.join(root, 'app.ts'), '');
+
+    const entries = new FileIndex(root).candidates();
+    expect(entries).toContain('app.ts');
   });
 
   it('reuses the cached index within the TTL', () => {

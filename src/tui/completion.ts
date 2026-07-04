@@ -122,7 +122,10 @@ export class FileIndex {
       { cwd: this.cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 3000 },
     );
     if (result.error || result.status !== 0) return undefined;
-    return result.stdout.split('\0').filter(Boolean).slice(0, MAX_INDEX);
+    const files = result.stdout.split('\0').filter(Boolean).slice(0, MAX_INDEX);
+    // an entirely gitignored cwd (e.g. a scratch folder inside a repo)
+    // lists nothing — the walk sees the real files
+    return files.length > 0 ? files : undefined;
   }
 
   private walkFiles(): string[] {
