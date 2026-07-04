@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0 — 2026-07-04
+
+- **One team voice** — the founders now answer you as one team: they agree in chat who speaks (whoever owns the work; Claude by default), the speaker replies for both ("we split it, we're done"), and duplicate parallel reports are protocol violations. Their internal coordination is still visible but rendered dim — answers to you stand out.
+- **Input history** — ↑/↓ recall previous inputs (shell-style, with your in-progress draft preserved). Persisted per project in `.ccx/history.json` across sessions.
+- **`/clear`** — wipe the founders' chat, the task board, and both agents' contexts; fresh founders are re-bootstrapped without restarting ccx.
+- **`/model claude|codex <model>`** — switch a founder's model mid-session. Claude restarts its process resuming the same conversation (context survives); Codex applies it from the next turn (same thread).
+- **`ccx sessions`** — list past sessions in the project (date, message count, open tasks, first goal), and resume any of them with `ccx --resume <n>`; bare `--resume` still takes the latest.
+- **Safer Ctrl+C** — first press warns, second press quits cleanly (journal flushed, agents shut down). No more instant kills.
+
 ## 0.6.1 — 2026-07-04
 
 - **Enter accepts the highlighted completion** while the `@` menu is open (it used to submit the raw text, producing `unknown founder "@"`). Tab still works; a second Enter sends the message.

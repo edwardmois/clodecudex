@@ -60,6 +60,11 @@ export class TaskBoard {
     }
   }
 
+  /** Drop every task (used by /clear); id numbering stays monotonic. */
+  clear(): void {
+    this.tasks.clear();
+  }
+
   createTask(title: string, files: string[], createdBy: Participant): Task {
     const task: Task = {
       id: `T${this.nextId++}`,

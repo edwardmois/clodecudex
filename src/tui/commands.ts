@@ -5,6 +5,8 @@ export type Command =
   | { type: 'pause'; agent: AgentName }
   | { type: 'resume'; agent: AgentName }
   | { type: 'stop'; agent?: AgentName }
+  | { type: 'clear' }
+  | { type: 'model'; agent: AgentName; model: string }
   | { type: 'tasks' }
   | { type: 'usage' }
   | { type: 'diff' }
@@ -19,13 +21,15 @@ export const HELP_TEXT = `Commands:
   /pause claude|codex            stop delivering work to a founder
   /resume claude|codex           resume a paused founder
   /stop [claude|codex]           interrupt in-flight work (Esc does the same for both)
+  /clear                         wipe chat, board and both founders' contexts — fresh start
+  /model claude|codex <model>    switch a founder's model mid-session (context survives)
   /tasks                         show the task board
   /usage                         token usage + subscription windows
   /diff                          show the current git diff (local only)
   /help                          this help
   /quit                          end the session
-Anything else is posted to the founders' chat.
-Start with \`ccx --resume\` to continue the previous session in this project.`;
+Anything else is posted to the founders' chat. ↑/↓ recall previous inputs.
+Start with \`ccx --resume\` to continue the latest session, \`ccx sessions\` to list older ones.`;
 
 function parseAgent(raw: string | undefined): AgentName | undefined {
   return AGENT_NAMES.find((a) => a === raw?.toLowerCase());
@@ -47,7 +51,7 @@ export function parseInput(raw: string): Command {
 
   if (!input.startsWith('/')) return { type: 'message', text: input };
 
-  const [command, arg] = input.slice(1).split(/\s+/);
+  const [command, arg, ...rest] = input.slice(1).split(/\s+/);
   switch (command?.toLowerCase()) {
     case 'pause':
     case 'resume': {
@@ -60,6 +64,16 @@ export function parseInput(raw: string): Command {
       const agent = parseAgent(arg);
       if (!agent) return { type: 'error', message: 'usage: /stop [claude|codex]' };
       return { type: 'stop', agent };
+    }
+    case 'clear':
+      return { type: 'clear' };
+    case 'model': {
+      const agent = parseAgent(arg);
+      const model = rest.join(' ');
+      if (!agent || !model) {
+        return { type: 'error', message: 'usage: /model claude|codex <model>' };
+      }
+      return { type: 'model', agent, model };
     }
     case 'tasks':
       return { type: 'tasks' };

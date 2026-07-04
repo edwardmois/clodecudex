@@ -162,4 +162,12 @@ describe('CodexAdapter.buildArgs', () => {
     const adapter = new CodexAdapter({ ...base, model: 'gpt-5.2-codex' });
     expect(adapter.buildArgs()).toContain('gpt-5.2-codex');
   });
+
+  it('applies a mid-session model switch on the next turn', () => {
+    const adapter = new CodexAdapter({ ...base, model: 'gpt-5.2-codex' });
+    adapter.setModel('gpt-5.3-codex');
+    const args = adapter.buildArgs();
+    expect(args).toContain('gpt-5.3-codex');
+    expect(args).not.toContain('gpt-5.2-codex');
+  });
 });

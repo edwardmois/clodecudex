@@ -27,21 +27,10 @@ export function newJournalPath(dir: string): string {
   return path.join(dir, `${stamp}.json`);
 }
 
-/** Load the most recent journal in `dir`, or undefined when none exist. */
-export function loadLatestJournal(
-  dir: string,
+/** Load one journal file; undefined when missing/corrupt/foreign. */
+export function loadJournal(
+  filePath: string,
 ): { path: string; data: SessionJournalData } | undefined {
-  let files: string[];
-  try {
-    files = readdirSync(dir)
-      .filter((f) => f.endsWith('.json'))
-      .sort();
-  } catch {
-    return undefined;
-  }
-  const newest = files.at(-1);
-  if (!newest) return undefined;
-  const filePath = path.join(dir, newest);
   try {
     const data = JSON.parse(readFileSync(filePath, 'utf8')) as SessionJournalData;
     if (data.version !== 1) return undefined;
@@ -49,6 +38,51 @@ export function loadLatestJournal(
   } catch {
     return undefined;
   }
+}
+
+/** Load the most recent journal in `dir`, or undefined when none exist. */
+export function loadLatestJournal(
+  dir: string,
+): { path: string; data: SessionJournalData } | undefined {
+  const newest = listJournals(dir)[0];
+  return newest ? loadJournal(newest.path) : undefined;
+}
+
+/** One line per past session, for `ccx sessions` / the --resume picker. */
+export interface JournalSummary {
+  path: string;
+  startedAt: number;
+  updatedAt: number;
+  messages: number;
+  openTasks: number;
+  /** First thing the user asked for — the session's human-readable handle. */
+  firstGoal?: string;
+}
+
+/** All sessions in `dir`, newest first. Corrupt files are skipped. */
+export function listJournals(dir: string): JournalSummary[] {
+  let files: string[];
+  try {
+    files = readdirSync(dir).filter((f) => f.endsWith('.json'));
+  } catch {
+    return [];
+  }
+  const summaries: JournalSummary[] = [];
+  for (const file of files) {
+    const loaded = loadJournal(path.join(dir, file));
+    if (!loaded) continue;
+    const { data } = loaded;
+    const firstGoal = data.transcript.find((m) => m.from === 'user')?.text.slice(0, 60);
+    summaries.push({
+      path: loaded.path,
+      startedAt: data.startedAt,
+      updatedAt: data.updatedAt,
+      messages: data.transcript.length,
+      openTasks: data.tasks.filter((t) => t.status !== 'done').length,
+      ...(firstGoal ? { firstGoal } : {}),
+    });
+  }
+  return summaries.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 /**

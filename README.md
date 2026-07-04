@@ -2,7 +2,7 @@
 
 > Two AI co-founders in one terminal. **Claude Code** and **OpenAI Codex CLI** working together on your codebase — live 3-way chat, a shared task board, cross-review by the model that didn't write the code. Runs on the subscriptions you already have. **Zero API keys.**
 
-**Status: v0.6.1 — early development.** See [CHANGELOG.md](CHANGELOG.md) for what's new.
+**Status: v0.7.0 — early development.** See [CHANGELOG.md](CHANGELOG.md) for what's new.
 
 ```
 [user]  add rate limiting to the API + tests
@@ -69,7 +69,9 @@ ccx doctor        # verify both CLIs are installed and logged in
 ccx               # start a session
 ```
 
-Then just type a goal. Slash commands: `/pause claude|codex`, `/resume claude|codex`, `/stop [claude|codex]`, `/tasks`, `/usage`, `/diff`, `/help`, `/quit`. Use `@claude …` / `@codex …` to address one founder, and `@path/to/file` to reference files (validated, both founders read them) — typing `@` opens an autocomplete menu of project files and folders (`Enter`/`Tab` completes, `↑↓` move, `Esc` dismisses). Press **Esc** to interrupt whoever is mid-turn — both founders keep their context, and your next message goes first.
+Then just type a goal. The founders split the work between themselves and **answer you as one team** — one consolidated reply, not two parallel reports (their internal coordination stays visible, dimmed).
+
+Slash commands: `/pause claude|codex`, `/resume claude|codex`, `/stop [claude|codex]`, `/clear`, `/model claude|codex <model>`, `/tasks`, `/usage`, `/diff`, `/help`, `/quit`. Use `@claude …` / `@codex …` to address one founder, and `@path/to/file` to reference files (validated, both founders read them) — typing `@` opens an autocomplete menu of project files and folders (`Enter`/`Tab` completes, `↑↓` move, `Esc` dismisses). Press **Esc** to interrupt whoever is mid-turn — both founders keep their context, and your next message goes first. `↑`/`↓` recall previous inputs (persisted per project); `Ctrl+C` warns once, quits cleanly on the second press.
 
 ### Usage tracking
 
@@ -78,7 +80,9 @@ Then just type a goal. Slash commands: `/pause claude|codex`, `/resume claude|co
 ### Resuming a session
 
 ```bash
-ccx --resume   # continue the most recent session in this project
+ccx --resume       # continue the most recent session in this project
+ccx sessions       # list past sessions (date, messages, open tasks, first goal)
+ccx --resume 3     # resume session #3 from that list
 ```
 
 No database involved: both CLIs already persist their own conversation histories locally, so ccx only journals the shared state — the founders' chat, the task board, and the two session ids — to `.ccx/sessions/` in your project (add `.ccx/` to your `.gitignore`). On resume, both agents reattach to their existing conversations with full context, the board comes back with ownership intact, and the recent chat is replayed in the TUI.

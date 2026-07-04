@@ -161,6 +161,12 @@ export class CodexAdapter implements AgentAdapter {
     this.runTurn([...held, digest].join('\n\n'));
   }
 
+  /** Turn-based: the next `codex exec resume` simply launches with the new
+   * model — the thread (and so the context) carries over. */
+  setModel(model: string): void {
+    this.options.model = model;
+  }
+
   /** Kill the in-flight turn; the thread survives and resumes next delivery. */
   interrupt(): void {
     if (!this.busy || !this.child) return;

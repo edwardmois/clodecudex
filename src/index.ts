@@ -8,6 +8,26 @@ const { version } = require('../package.json') as { version: string };
 const program = new Command();
 
 program
+  .command('sessions')
+  .description('List past ccx sessions in this project (resume one with ccx --resume <n>)')
+  .action(async () => {
+    const { journalDir, listJournals } = await import('./core/journal.js');
+    const sessions = listJournals(journalDir(process.cwd()));
+    if (sessions.length === 0) {
+      console.log('No past ccx sessions in this project (.ccx/sessions is empty).');
+      return;
+    }
+    for (const [i, s] of sessions.entries()) {
+      const when = new Date(s.updatedAt).toLocaleString();
+      const goal = s.firstGoal ? ` — "${s.firstGoal}"` : '';
+      console.log(
+        `${String(i + 1).padStart(2)}. ${when} · ${s.messages} msg · ${s.openTasks} open task(s)${goal}`,
+      );
+    }
+    console.log('\nResume the latest with `ccx --resume`, or a specific one with `ccx --resume <n>`.');
+  });
+
+program
   .command('doctor')
   .description('Check that Claude Code and Codex CLI are installed, logged in, and ready')
   .action(async () => {
@@ -25,14 +45,18 @@ program
   .version(version)
   .option('--yolo', 'skip permission prompts for both agents (dangerous)', false)
   .option('--verbose', 'show raw tool activity (hub calls, tool glyphs, full commands)', false)
-  .option('--resume', 'continue the most recent ccx session in this project', false)
+  .option(
+    '--resume [n]',
+    'continue a previous ccx session (latest, or #n from `ccx sessions`)',
+    false,
+  )
   .option('--claude-model <model>', 'model for the Claude founder (e.g. sonnet, opus)')
   .option('--codex-model <model>', 'model for the Codex founder (e.g. gpt-5.2-codex)')
   .option('--config <path>', 'path to a ccx config file')
   .action(async (opts: {
     yolo: boolean;
     verbose: boolean;
-    resume: boolean;
+    resume: boolean | string;
     claudeModel?: string;
     codexModel?: string;
     config?: string;
@@ -54,20 +78,36 @@ program
     if (opts.claudeModel) config.claude.model = opts.claudeModel;
     if (opts.codexModel) config.codex.model = opts.codexModel;
 
-    const { JournalWriter, journalDir, loadLatestJournal, newJournalPath } = await import(
+    const { JournalWriter, journalDir, listJournals, loadJournal, newJournalPath } = await import(
       './core/journal.js'
     );
     const dir = journalDir(process.cwd());
     let resume;
     let journalPath = newJournalPath(dir);
-    if (opts.resume) {
-      const latest = loadLatestJournal(dir);
-      if (!latest) {
+    if (opts.resume !== false) {
+      const sessions = listJournals(dir);
+      if (sessions.length === 0) {
         console.error('No previous ccx session found in this project (.ccx/sessions is empty).');
         process.exit(1);
       }
-      resume = latest.data;
-      journalPath = latest.path; // keep appending to the same session
+      let picked = sessions[0]; // bare --resume = latest
+      if (typeof opts.resume === 'string') {
+        const n = Number(opts.resume);
+        if (!Number.isInteger(n) || n < 1 || n > sessions.length) {
+          console.error(
+            `No session #${opts.resume} — this project has ${sessions.length}. Run \`ccx sessions\` to list them.`,
+          );
+          process.exit(1);
+        }
+        picked = sessions[n - 1];
+      }
+      const loaded = picked ? loadJournal(picked.path) : undefined;
+      if (!loaded) {
+        console.error('That session journal could not be read.');
+        process.exit(1);
+      }
+      resume = loaded.data;
+      journalPath = loaded.path; // keep appending to the same session
     }
 
     const { Session } = await import('./core/session.js');
@@ -85,7 +125,8 @@ program
       import('./tui/App.js'),
     ]);
     const app = render(React.createElement(App, { session, verbose: opts.verbose }), {
-      exitOnCtrlC: true,
+      // ctrl+c is handled in the TUI: first press warns, second quits cleanly
+      exitOnCtrlC: false,
     });
     await app.waitUntilExit();
     await session.stop();

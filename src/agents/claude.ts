@@ -153,12 +153,14 @@ export class ClaudeAdapter implements AgentAdapter {
   private readonly queue: string[] = [];
   private child: ChildProcess | undefined;
   private stateDir: string | undefined;
+  private sessionId: string | undefined;
   private stopped = false;
   private interrupted = false;
   busy = false;
 
   constructor(options: ClaudeAdapterOptions) {
     this.options = options;
+    this.sessionId = options.resumeSessionId;
   }
 
   /** Exposed for tests: the argv used to launch the session. */
@@ -189,7 +191,11 @@ export class ClaudeAdapter implements AgentAdapter {
     const stateDir = this.options.stateDir ?? mkdtempSync(path.join(tmpdir(), 'ccx-claude-'));
     this.stateDir = stateDir;
     this.writeStateFiles(stateDir);
+    this.spawnChild(stateDir);
+    this.send(bootstrap);
+  }
 
+  private spawnChild(stateDir: string): void {
     const executable = this.options.executable ?? 'claude';
     const child = spawn(executable, this.buildArgs(stateDir), {
       cwd: this.options.cwd,
@@ -213,24 +219,48 @@ export class ClaudeAdapter implements AgentAdapter {
     });
 
     child.on('error', (error) => {
+      if (this.child !== child) return;
       this.emit({ type: 'error', message: `Failed to launch claude: ${error.message}` });
       this.emit({ type: 'status', status: 'idle' });
     });
     child.on('close', (code) => {
-      if (!this.stopped) {
-        if (code !== 0) {
-          this.emit({
-            type: 'error',
-            message: `claude exited with code ${code}${stderrTail ? `: ${stderrTail}` : ''}`,
-          });
-        }
-        this.busy = false;
-        this.emit({ type: 'status', status: 'idle' });
-        this.emit({ type: 'turn-complete' });
+      // a replaced (setModel restart) or stopped child may exit late — ignore it
+      if (this.child !== child || this.stopped) return;
+      if (code !== 0) {
+        this.emit({
+          type: 'error',
+          message: `claude exited with code ${code}${stderrTail ? `: ${stderrTail}` : ''}`,
+        });
       }
+      this.busy = false;
+      this.emit({ type: 'status', status: 'idle' });
+      this.emit({ type: 'turn-complete' });
     });
+  }
 
-    this.send(bootstrap);
+  /**
+   * Restart the persistent process with the new model, resuming its own
+   * conversation history — context survives the switch. An in-flight turn
+   * is cut short (like an interrupt); held chat waits for the next delivery.
+   */
+  setModel(model: string): void {
+    this.options.model = model;
+    if (!this.child || this.stopped || !this.stateDir) return; // applies at start()
+    const old = this.child;
+    this.child = undefined; // silences old close/error handlers
+    old.stdin?.end();
+    const timer = setTimeout(() => old.kill(), 3000);
+    old.once('close', () => clearTimeout(timer));
+
+    if (this.sessionId) this.options.resumeSessionId = this.sessionId;
+    const wasBusy = this.busy;
+    this.busy = false;
+    this.interrupted = false;
+    this.spawnChild(this.stateDir);
+    if (wasBusy) {
+      this.emit({ type: 'status', status: 'idle' });
+      this.emit({ type: 'turn-complete' });
+    }
   }
 
   deliver(digest: string): void {
@@ -295,6 +325,7 @@ export class ClaudeAdapter implements AgentAdapter {
 
   private handleLine(line: string): void {
     for (const event of parseClaudeLine(line)) {
+      if (event.type === 'session') this.sessionId = event.id;
       // an aborted turn reports itself as an error result; the user asked
       // for the stop, so don't surface it as a failure
       if (this.interrupted && event.type === 'error') continue;

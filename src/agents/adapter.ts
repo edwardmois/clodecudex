@@ -42,6 +42,12 @@ export interface AgentAdapter {
    * instead of auto-flushing, so the user's next message goes first.
    */
   interrupt(): void;
+  /**
+   * Switch models mid-session without losing conversation context.
+   * Turn-based agents apply it on the next turn; persistent ones restart
+   * their process resuming the same conversation.
+   */
+  setModel(model: string): void;
   /** Stop the agent. Safe to call twice. */
   stop(): Promise<void>;
   onEvent(listener: AgentEventListener): () => void;

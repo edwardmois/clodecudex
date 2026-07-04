@@ -37,6 +37,22 @@ describe('parseInput', () => {
     expect(parseInput('/stop bob').type).toBe('error');
   });
 
+  it('parses /clear and /model', () => {
+    expect(parseInput('/clear')).toEqual({ type: 'clear' });
+    expect(parseInput('/model codex gpt-5.3-codex')).toEqual({
+      type: 'model',
+      agent: 'codex',
+      model: 'gpt-5.3-codex',
+    });
+    expect(parseInput('/model claude opus')).toEqual({
+      type: 'model',
+      agent: 'claude',
+      model: 'opus',
+    });
+    expect(parseInput('/model claude').type).toBe('error');
+    expect(parseInput('/model bob x').type).toBe('error');
+  });
+
   it('parses simple commands and aliases', () => {
     expect(parseInput('/tasks')).toEqual({ type: 'tasks' });
     expect(parseInput('/diff')).toEqual({ type: 'diff' });

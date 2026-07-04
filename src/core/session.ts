@@ -96,6 +96,8 @@ export class Session {
     codex: emptyTotals(),
   };
   private readonly sessionIds: Partial<Record<AgentName, string>> = {};
+  /** Journal being resumed; dropped by clear() so agents bootstrap fresh. */
+  private resumeData: SessionJournalData | undefined;
   private readonly startedAt = Date.now();
   private flushTimer: NodeJS.Timeout | undefined;
   private nudgeTimer: NodeJS.Timeout | undefined;
@@ -104,6 +106,7 @@ export class Session {
 
   constructor(options: SessionOptions) {
     this.options = options;
+    this.resumeData = options.resume;
     this.board = new TaskBoard(options.cwd);
     this.hub = new FoundersHub({ bus: this.bus, board: this.board });
 
@@ -141,7 +144,18 @@ export class Session {
     if (this.started) throw new Error('Session already started');
     this.started = true;
     await this.hub.start();
+    await this.attachAgents();
 
+    const flushMs = this.options.idleFlushMs ?? DEFAULT_IDLE_FLUSH_MS;
+    this.flushTimer = setInterval(() => {
+      for (const agent of AGENT_NAMES) this.tryDeliver(agent, true);
+    }, flushMs);
+    const nudgeMs = this.options.nudgeIntervalMs ?? DEFAULT_NUDGE_INTERVAL_MS;
+    this.nudgeTimer = setInterval(() => this.checkDeadlock(nudgeMs), nudgeMs);
+  }
+
+  /** Create both adapters, wire their events, and send the first prompt. */
+  private async attachAgents(): Promise<void> {
     this.agents = this.options.createAdapters
       ? this.options.createAdapters(this.hub)
       : this.createRealAdapters();
@@ -152,7 +166,7 @@ export class Session {
     }
     const { config } = this.options;
     const firstPrompt = (agent: AgentName, persona: string): string => {
-      if (!this.options.resume) return buildBootstrap(agent, persona);
+      if (!this.resumeData) return buildBootstrap(agent, persona);
       const open = this.board
         .listTasks()
         .filter((t) => t.status !== 'done')
@@ -163,13 +177,33 @@ export class Session {
       this.agents.claude.start(firstPrompt('claude', config.claude.persona)),
       this.agents.codex.start(firstPrompt('codex', config.codex.persona)),
     ]);
+  }
 
-    const flushMs = this.options.idleFlushMs ?? DEFAULT_IDLE_FLUSH_MS;
-    this.flushTimer = setInterval(() => {
-      for (const agent of AGENT_NAMES) this.tryDeliver(agent, true);
-    }, flushMs);
-    const nudgeMs = this.options.nudgeIntervalMs ?? DEFAULT_NUDGE_INTERVAL_MS;
-    this.nudgeTimer = setInterval(() => this.checkDeadlock(nudgeMs), nudgeMs);
+  /**
+   * /clear: wipe the founders' chat, the board, and both agents' contexts,
+   * then re-bootstrap fresh founders. The journal keeps the same file — it
+   * now records the cleared state.
+   */
+  async clear(): Promise<void> {
+    if (!this.agents) return;
+    await Promise.all(AGENT_NAMES.map((a) => this.agents?.[a].stop()));
+    this.bus.clear();
+    this.board.clear();
+    this.paused.clear();
+    this.limitPaused.clear();
+    delete this.sessionIds.claude;
+    delete this.sessionIds.codex;
+    this.resumeData = undefined; // fresh bootstrap, no --resume ids
+    await this.attachAgents();
+    this.saveJournal();
+  }
+
+  /**
+   * Switch a founder's model mid-session. Claude restarts its process on
+   * its own conversation (context survives); Codex applies it next turn.
+   */
+  setModel(agent: AgentName, model: string): void {
+    this.agents?.[agent].setModel(model);
   }
 
   /** The human founder speaks. `to` targets one agent (from "@claude ..."). */
@@ -238,8 +272,8 @@ export class Session {
         ownershipUrl: this.hub.ownershipUrlFor('claude'),
         permissionMode: config.claude.permissionMode,
         ...(config.claude.model ? { model: config.claude.model } : {}),
-        ...(this.options.resume?.claudeSessionId
-          ? { resumeSessionId: this.options.resume.claudeSessionId }
+        ...(this.resumeData?.claudeSessionId
+          ? { resumeSessionId: this.resumeData.claudeSessionId }
           : {}),
       }),
       codex: new CodexAdapter({
@@ -248,8 +282,8 @@ export class Session {
         sandbox: config.codex.sandbox,
         reasoningEffort: config.codex.reasoningEffort,
         ...(config.codex.model ? { model: config.codex.model } : {}),
-        ...(this.options.resume?.codexThreadId
-          ? { resumeThreadId: this.options.resume.codexThreadId }
+        ...(this.resumeData?.codexThreadId
+          ? { resumeThreadId: this.resumeData.codexThreadId }
           : {}),
       }),
     };
@@ -317,7 +351,7 @@ export class Session {
   private saveJournal(): void {
     this.options.journal?.schedule({
       version: 1,
-      startedAt: this.options.resume?.startedAt ?? this.startedAt,
+      startedAt: this.resumeData?.startedAt ?? this.startedAt,
       updatedAt: Date.now(),
       ...(this.sessionIds.claude ? { claudeSessionId: this.sessionIds.claude } : {}),
       ...(this.sessionIds.codex ? { codexThreadId: this.sessionIds.codex } : {}),

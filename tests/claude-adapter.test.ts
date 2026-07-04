@@ -94,6 +94,23 @@ describe('ClaudeAdapter.buildArgs', () => {
     expect(args[args.indexOf('--settings') + 1]).toBe(path.join('/state', 'settings.json'));
     expect(args[args.indexOf('--model') + 1]).toBe('sonnet');
   });
+
+  it('setModel before launch changes the model and resumes a known session', () => {
+    const adapter = new ClaudeAdapter({
+      cwd: 'D:/proj',
+      hubUrl: 'http://127.0.0.1:5000/hub/abc/claude',
+      ownershipUrl: 'http://127.0.0.1:5000/hub/abc/claude/ownership',
+      model: 'sonnet',
+    });
+    // the adapter tracks its session id from the stream
+    (adapter as unknown as { handleLine(line: string): void }).handleLine(
+      JSON.stringify({ type: 'system', subtype: 'init', session_id: 'sess-42' }),
+    );
+    adapter.setModel('opus');
+    const args = adapter.buildArgs('/state');
+    expect(args[args.indexOf('--model') + 1]).toBe('opus');
+    expect(args).not.toContain('sonnet');
+  });
 });
 
 describe('ClaudeAdapter.interrupt', () => {

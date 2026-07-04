@@ -55,6 +55,12 @@ export class MessageBus {
     for (const participant of caughtUp) this.cursors.set(participant, this.messages.length);
   }
 
+  /** Wipe the transcript and all delivery cursors (used by /clear). */
+  clear(): void {
+    this.messages.length = 0;
+    this.cursors.clear();
+  }
+
   post(input: PostInput): ChatMessage {
     const message: ChatMessage = {
       id: randomUUID(),

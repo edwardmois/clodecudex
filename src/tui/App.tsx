@@ -9,6 +9,7 @@ import { HELP_TEXT, parseInput } from './commands.js';
 import { formatActivity, isNearDuplicate } from './format.js';
 import { expandFileMentions } from './mentions.js';
 import { FileIndex, applyCompletion, extractMentionQuery, rankCompletions } from './completion.js';
+import { InputHistory, loadHistory, saveHistory } from './history.js';
 import { formatTokens, formatWindow, readCodexRateLimits } from '../core/usage.js';
 
 const AGENT_COLORS: Record<string, string> = {
@@ -95,6 +96,8 @@ export function App({
   const [selected, setSelected] = useState(0);
   const dismissedFor = React.useRef<string | undefined>(undefined);
   const mention = useMemo(() => extractMentionQuery(input), [input]);
+  const history = useMemo(() => new InputHistory(loadHistory(process.cwd())), []);
+  const ctrlCAt = React.useRef(0);
 
   useEffect(() => {
     if (dismissedFor.current !== input) dismissedFor.current = undefined;
@@ -122,11 +125,15 @@ export function App({
       switch (event.type) {
         case 'chat': {
           const { from, to, text } = event.message;
-          if (from === 'claude' || from === 'codex') lastSaid.current[from] = text;
+          const fromFounder = from === 'claude' || from === 'codex';
+          if (fromFounder) lastSaid.current[from] = text;
+          // one team voice: answers to the user stand out; the founders'
+          // internal coordination is visible but dim — process, not product
           append(
             item(`[${from}${to ? ` → ${to}` : ''}] ${text}`, {
               color: AGENT_COLORS[from] ?? 'white',
               bold: from === 'user',
+              dim: fromFounder && to !== 'user',
             }),
           );
           break;
@@ -211,9 +218,19 @@ export function App({
   );
 
   // Tab/↑/↓/Esc drive the @-completion menu (ink-text-input ignores these
-  // keys, so they fall through to us); Esc with no menu open interrupts
-  // whoever is mid-turn, like in Claude Code.
-  useInput((_input, key) => {
+  // keys, so they fall through to us). With no menu open: ↑/↓ recall input
+  // history, Esc interrupts whoever is mid-turn, Ctrl+C twice quits.
+  useInput((raw, key) => {
+    if (key.ctrl && raw === 'c') {
+      const now = Date.now();
+      if (now - ctrlCAt.current < 2000) {
+        void session.stop().finally(() => exit());
+      } else {
+        ctrlCAt.current = now;
+        append(item('press ctrl+c again to quit (or /quit)', { dim: true }));
+      }
+      return;
+    }
     if (suggestions.length > 0 && mention) {
       if (key.tab) {
         const pick = suggestions[selected];
@@ -234,6 +251,16 @@ export function App({
         return;
       }
     }
+    if (key.upArrow) {
+      const prev = history.up(input);
+      if (prev !== undefined) setInput(prev);
+      return;
+    }
+    if (key.downArrow) {
+      const next = history.down();
+      if (next !== undefined) setInput(next);
+      return;
+    }
     if (key.escape) stopAgents(undefined, true);
   });
 
@@ -248,6 +275,10 @@ export function App({
         }
       }
       setInput('');
+      if (raw.trim()) {
+        history.push(raw);
+        saveHistory(process.cwd(), history.all());
+      }
       const command = parseInput(raw);
       switch (command.type) {
         case 'message': {
@@ -284,6 +315,28 @@ export function App({
           break;
         case 'stop':
           stopAgents(command.agent, false);
+          break;
+        case 'clear':
+          lastSaid.current = {};
+          setTasks([]);
+          // wipe the visible scrollback; Static keeps appending after it
+          process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
+          append(item('── context cleared — fresh founders, empty board ──', { color: 'green', bold: true }));
+          void session.clear().catch((error: unknown) => {
+            append(item(`✗ clear failed: ${String(error)}`, { color: 'red' }));
+          });
+          break;
+        case 'model':
+          session.setModel(command.agent, command.model);
+          append(
+            item(
+              `◆ ${command.agent} model → ${command.model}` +
+                (command.agent === 'claude'
+                  ? ' (restarting on the same conversation)'
+                  : ' (applies from the next turn)'),
+              { color: 'yellow' },
+            ),
+          );
           break;
         case 'tasks': {
           const list = session.board.listTasks();
@@ -327,7 +380,7 @@ export function App({
           break;
       }
     },
-    [session, append, exit, showDiff, stopAgents, suggestions, mention, selected],
+    [session, append, exit, showDiff, stopAgents, suggestions, mention, selected, history],
   );
 
   const openTasks = useMemo(() => tasks.filter((t) => t.status !== 'done'), [tasks]);

@@ -23,6 +23,10 @@ class FakeAdapter implements AgentAdapter {
     this.interrupts += 1;
     this.busy = false;
   }
+  setModel(model: string): void {
+    this.models.push(model);
+  }
+  readonly models: string[] = [];
   async stop(): Promise<void> {}
   onEvent(listener: AgentEventListener): () => void {
     this.listeners.add(listener);
@@ -185,6 +189,12 @@ describe('Session', () => {
     expect(codex.interrupts).toBe(1);
   });
 
+  it('forwards mid-session model switches to the right adapter', () => {
+    session.setModel('codex', 'gpt-5.3-codex');
+    expect(codex.models).toEqual(['gpt-5.3-codex']);
+    expect(claude.models).toEqual([]);
+  });
+
   it('surfaces agent errors as session events', () => {
     codex.fire({ type: 'error', message: 'spawn failed unexpectedly' });
     expect(events).toContainEqual({
@@ -218,6 +228,46 @@ describe('Session', () => {
     session.resume('claude');
     expect(session.isPaused('claude')).toBe(false);
     expect(claude.delivered.length).toBeGreaterThan(0);
+  });
+});
+
+describe('Session /clear', () => {
+  it('wipes chat/board/pauses and re-bootstraps fresh founders', async () => {
+    vi.useFakeTimers();
+    let generation = 0;
+    let claude!: FakeAdapter;
+    let codex!: FakeAdapter;
+    const session = new Session({
+      cwd: '/repo',
+      config,
+      createAdapters: () => {
+        generation += 1;
+        claude = new FakeAdapter('claude');
+        codex = new FakeAdapter('codex');
+        return { claude, codex };
+      },
+    });
+    await session.start();
+    session.postUserMessage('old goal');
+    session.board.createTask('auth', ['src/**'], 'user');
+    session.pause('codex');
+
+    await session.clear();
+
+    expect(generation).toBe(2); // fresh adapters, not reused ones
+    expect(session.bus.transcript).toHaveLength(0);
+    expect(session.board.listTasks()).toHaveLength(0);
+    expect(session.isPaused('codex')).toBe(false);
+    // full bootstrap again — not a resume brief
+    expect(claude.bootstrap).toContain('You are "claude"');
+    expect(claude.bootstrap).not.toContain('resumed');
+
+    session.postUserMessage('new goal');
+    expect(claude.delivered.some((d) => d.includes('new goal'))).toBe(true);
+    expect(claude.delivered.some((d) => d.includes('old goal'))).toBe(false);
+
+    await session.stop();
+    vi.useRealTimers();
   });
 });
 
