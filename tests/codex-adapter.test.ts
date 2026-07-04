@@ -79,6 +79,46 @@ describe('parseCodexLine', () => {
   });
 });
 
+describe('CodexAdapter.interrupt', () => {
+  const base = {
+    cwd: 'D:/proj',
+    hubUrl: 'http://127.0.0.1:5000/hub/abc/codex',
+  };
+  interface Internals {
+    busy: boolean;
+    interrupted: boolean;
+    child: unknown;
+    queue: string[];
+    finishTurn(error?: string, opts?: { flushQueue?: boolean }): void;
+  }
+
+  it('kills the in-flight turn and holds queued digests for the next delivery', () => {
+    const adapter = new CodexAdapter(base);
+    let killed = false;
+    const internals = adapter as unknown as Internals;
+    internals.busy = true;
+    internals.child = { kill: () => (killed = true) };
+    internals.queue.push('peer chatter while working');
+
+    adapter.interrupt();
+    expect(killed).toBe(true);
+    expect(internals.interrupted).toBe(true);
+
+    // what the close handler does after an interrupted turn
+    internals.finishTurn(undefined, { flushQueue: false });
+    expect(adapter.busy).toBe(false);
+    expect(internals.interrupted).toBe(false);
+    // held, not auto-flushed — the user's next message goes first
+    expect(internals.queue).toEqual(['peer chatter while working']);
+  });
+
+  it('is a no-op when idle', () => {
+    const adapter = new CodexAdapter(base);
+    expect(() => adapter.interrupt()).not.toThrow();
+    expect((adapter as unknown as Internals).interrupted).toBe(false);
+  });
+});
+
 describe('CodexAdapter.buildArgs', () => {
   const base = {
     cwd: 'D:/proj',

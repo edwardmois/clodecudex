@@ -6,6 +6,7 @@ import type { CcxConfig } from '../src/config/config.js';
 
 class FakeAdapter implements AgentAdapter {
   readonly delivered: string[] = [];
+  interrupts = 0;
   busy = false;
   bootstrap = '';
   private listeners = new Set<AgentEventListener>();
@@ -17,6 +18,10 @@ class FakeAdapter implements AgentAdapter {
   }
   deliver(digest: string): void {
     this.delivered.push(digest);
+  }
+  interrupt(): void {
+    this.interrupts += 1;
+    this.busy = false;
   }
   async stop(): Promise<void> {}
   onEvent(listener: AgentEventListener): () => void {
@@ -161,6 +166,23 @@ describe('Session', () => {
     claude.fire({ type: 'usage', input: 20, cached: 1000, output: 5 });
     expect(session.usageOf('claude')).toEqual({ input: 120, cached: 5000, output: 55, turns: 2 });
     expect(session.usageOf('codex').turns).toBe(0);
+  });
+
+  it('interrupts only busy agents and reports which were stopped', () => {
+    claude.busy = true;
+    expect(session.interruptBusy()).toEqual(['claude']);
+    expect(claude.interrupts).toBe(1);
+    expect(codex.interrupts).toBe(0);
+
+    // nobody busy → nothing interrupted
+    expect(session.interruptBusy()).toEqual([]);
+
+    // targeted stop only touches the named founder
+    claude.busy = true;
+    codex.busy = true;
+    expect(session.interruptBusy('codex')).toEqual(['codex']);
+    expect(claude.interrupts).toBe(1);
+    expect(codex.interrupts).toBe(1);
   });
 
   it('surfaces agent errors as session events', () => {

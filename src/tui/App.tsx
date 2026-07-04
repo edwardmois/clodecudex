@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, Static, Text, useApp } from 'ink';
+import { Box, Static, Text, useApp, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { execFile } from 'node:child_process';
 import type { Session, SessionEvent } from '../core/session.js';
@@ -162,6 +162,35 @@ export function App({
     );
   }, [append]);
 
+  const stopAgents = useCallback(
+    (only: AgentName | undefined, quiet: boolean) => {
+      const hit = session.interruptBusy(only);
+      if (hit.length > 0) {
+        append(
+          item(`⏹ interrupted ${hit.join(' and ')} — context kept, type to redirect`, {
+            color: 'yellow',
+            bold: true,
+          }),
+        );
+      } else if (!quiet) {
+        append(
+          item(
+            only
+              ? `${only} is not working right now — nothing to stop`
+              : 'nobody is working right now — nothing to stop',
+            { dim: true },
+          ),
+        );
+      }
+    },
+    [session, append],
+  );
+
+  // Esc interrupts whoever is mid-turn, like in Claude Code
+  useInput((_input, key) => {
+    if (key.escape) stopAgents(undefined, true);
+  });
+
   const submit = useCallback(
     (raw: string) => {
       setInput('');
@@ -198,6 +227,9 @@ export function App({
             return next;
           });
           append(item(`▶ ${command.agent} resumed`, { color: 'yellow' }));
+          break;
+        case 'stop':
+          stopAgents(command.agent, false);
           break;
         case 'tasks': {
           const list = session.board.listTasks();
@@ -241,7 +273,7 @@ export function App({
           break;
       }
     },
-    [session, append, exit, showDiff],
+    [session, append, exit, showDiff, stopAgents],
   );
 
   const openTasks = useMemo(() => tasks.filter((t) => t.status !== 'done'), [tasks]);

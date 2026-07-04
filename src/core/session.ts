@@ -181,6 +181,24 @@ export class Session {
     this.paused.add(agent);
   }
 
+  /**
+   * Interrupt in-flight work (Esc / /stop). Returns the founders that were
+   * actually mid-turn; they stay alive and their context survives — held
+   * chat waits so the user's next message is heard first.
+   */
+  interruptBusy(only?: AgentName): AgentName[] {
+    const targets = only ? [only] : [...AGENT_NAMES];
+    const interrupted: AgentName[] = [];
+    for (const agent of targets) {
+      const adapter = this.agents?.[agent];
+      if (adapter?.busy) {
+        adapter.interrupt();
+        interrupted.push(agent);
+      }
+    }
+    return interrupted;
+  }
+
   resume(agent: AgentName): void {
     this.paused.delete(agent);
     this.limitPaused.delete(agent);

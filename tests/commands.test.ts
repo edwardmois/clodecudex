@@ -31,6 +31,12 @@ describe('parseInput', () => {
     expect(parseInput('/pause bob').type).toBe('error');
   });
 
+  it('parses /stop with an optional agent', () => {
+    expect(parseInput('/stop')).toEqual({ type: 'stop' });
+    expect(parseInput('/stop claude')).toEqual({ type: 'stop', agent: 'claude' });
+    expect(parseInput('/stop bob').type).toBe('error');
+  });
+
   it('parses simple commands and aliases', () => {
     expect(parseInput('/tasks')).toEqual({ type: 'tasks' });
     expect(parseInput('/diff')).toEqual({ type: 'diff' });

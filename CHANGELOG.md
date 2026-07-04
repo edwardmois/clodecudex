@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0 — 2026-07-04
+
+- **Esc to interrupt** — press Esc to stop whatever the founders are doing mid-turn, like in Claude Code. Claude gets the stream-json interrupt control request (its session process stays alive); Codex's turn process is stopped (its thread survives and resumes on the next message). Context is kept on both sides, and chat that queued up while they worked is held back so your next message is heard first.
+- **`/stop [claude|codex]`** — the same interrupt as an explicit command, optionally targeting one founder.
+
 ## 0.4.0 — 2026-07-03
 
 - **`@file` mentions** — reference files in messages like in Claude Code: `fix the bug in @src/auth.ts`. Paths are validated before sending (typos error immediately), normalized, and both founders are told to read them. Contents aren't inlined — the agents read the files themselves, so nothing is paid for twice. `@claude` / `@codex` still address founders.

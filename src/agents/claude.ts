@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -153,6 +154,7 @@ export class ClaudeAdapter implements AgentAdapter {
   private child: ChildProcess | undefined;
   private stateDir: string | undefined;
   private stopped = false;
+  private interrupted = false;
   busy = false;
 
   constructor(options: ClaudeAdapterOptions) {
@@ -237,7 +239,24 @@ export class ClaudeAdapter implements AgentAdapter {
       this.queue.push(digest);
       return;
     }
-    this.send(digest);
+    // include anything held back by an interrupt
+    const held = this.queue.splice(0);
+    this.send([...held, digest].join('\n\n'));
+  }
+
+  /**
+   * Abort the in-flight turn via the stream-json control protocol; the
+   * session process stays alive with its context intact.
+   */
+  interrupt(): void {
+    if (!this.busy || !this.child) return;
+    this.interrupted = true;
+    const line = JSON.stringify({
+      type: 'control_request',
+      request_id: randomUUID(),
+      request: { subtype: 'interrupt' },
+    });
+    this.child.stdin?.write(`${line}\n`);
   }
 
   async stop(): Promise<void> {
@@ -276,10 +295,17 @@ export class ClaudeAdapter implements AgentAdapter {
 
   private handleLine(line: string): void {
     for (const event of parseClaudeLine(line)) {
+      // an aborted turn reports itself as an error result; the user asked
+      // for the stop, so don't surface it as a failure
+      if (this.interrupted && event.type === 'error') continue;
       if (event.type === 'turn-complete') {
         this.busy = false;
+        const wasInterrupted = this.interrupted;
+        this.interrupted = false;
         this.emit(event);
-        if (this.queue.length > 0 && !this.stopped) {
+        // after an interrupt, held digests wait for the next delivery so the
+        // user's follow-up message goes first
+        if (!wasInterrupted && this.queue.length > 0 && !this.stopped) {
           this.send(this.queue.splice(0).join('\n\n'));
         }
         continue;

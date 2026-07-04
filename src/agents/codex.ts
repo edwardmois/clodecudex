@@ -137,6 +137,7 @@ export class CodexAdapter implements AgentAdapter {
   private sessionId: string | undefined;
   private child: ChildProcess | undefined;
   private stopped = false;
+  private interrupted = false;
   busy = false;
 
   constructor(options: CodexAdapterOptions) {
@@ -155,7 +156,16 @@ export class CodexAdapter implements AgentAdapter {
       this.queue.push(digest);
       return;
     }
-    this.runTurn(digest);
+    // include anything held back by an interrupt
+    const held = this.queue.splice(0);
+    this.runTurn([...held, digest].join('\n\n'));
+  }
+
+  /** Kill the in-flight turn; the thread survives and resumes next delivery. */
+  interrupt(): void {
+    if (!this.busy || !this.child) return;
+    this.interrupted = true;
+    this.child.kill();
   }
 
   async stop(): Promise<void> {
@@ -260,6 +270,12 @@ export class CodexAdapter implements AgentAdapter {
       this.finishTurn(`Failed to launch codex: ${error.message}`);
     });
     child.on('close', (code) => {
+      if (this.interrupted) {
+        // user-initiated: not an error, and held digests wait for the next delivery
+        this.emit({ type: 'status', status: 'idle' });
+        this.finishTurn(undefined, { flushQueue: false });
+        return;
+      }
       if (code !== 0 && !this.stopped) {
         this.finishTurn(`codex exited with code ${code}${stderrTail ? `: ${stderrTail}` : ''}`);
         return;
@@ -271,15 +287,16 @@ export class CodexAdapter implements AgentAdapter {
     });
   }
 
-  private finishTurn(error?: string): void {
+  private finishTurn(error?: string, opts: { flushQueue?: boolean } = {}): void {
     this.busy = false;
     this.child = undefined;
+    this.interrupted = false;
     if (error) {
       this.emit({ type: 'error', message: error });
       this.emit({ type: 'status', status: 'idle' });
     }
     this.emit({ type: 'turn-complete' });
-    if (this.queue.length > 0 && !this.stopped) {
+    if (opts.flushQueue !== false && this.queue.length > 0 && !this.stopped) {
       const next = this.queue.splice(0).join('\n\n');
       this.runTurn(next);
     }

@@ -4,6 +4,7 @@ export type Command =
   | { type: 'message'; text: string; to?: AgentName }
   | { type: 'pause'; agent: AgentName }
   | { type: 'resume'; agent: AgentName }
+  | { type: 'stop'; agent?: AgentName }
   | { type: 'tasks' }
   | { type: 'usage' }
   | { type: 'diff' }
@@ -16,6 +17,7 @@ export const HELP_TEXT = `Commands:
   @path/to/file                  reference a file in a message (validated, both founders told to read it)
   /pause claude|codex            stop delivering work to a founder
   /resume claude|codex           resume a paused founder
+  /stop [claude|codex]           interrupt in-flight work (Esc does the same for both)
   /tasks                         show the task board
   /usage                         token usage + subscription windows
   /diff                          show the current git diff (local only)
@@ -51,6 +53,12 @@ export function parseInput(raw: string): Command {
       const agent = parseAgent(arg);
       if (!agent) return { type: 'error', message: `usage: /${command} claude|codex` };
       return { type: command.toLowerCase() as 'pause' | 'resume', agent };
+    }
+    case 'stop': {
+      if (!arg) return { type: 'stop' };
+      const agent = parseAgent(arg);
+      if (!agent) return { type: 'error', message: 'usage: /stop [claude|codex]' };
+      return { type: 'stop', agent };
     }
     case 'tasks':
       return { type: 'tasks' };

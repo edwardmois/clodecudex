@@ -36,6 +36,12 @@ export interface AgentAdapter {
    * the delivery is queued and flushed when the turn completes.
    */
   deliver(digest: string): void;
+  /**
+   * Abort the current turn (user pressed Esc). The agent stays alive and
+   * keeps its context; queued digests are held until the next delivery
+   * instead of auto-flushing, so the user's next message goes first.
+   */
+  interrupt(): void;
   /** Stop the agent. Safe to call twice. */
   stop(): Promise<void>;
   onEvent(listener: AgentEventListener): () => void;

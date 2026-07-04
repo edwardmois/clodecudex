@@ -96,6 +96,73 @@ describe('ClaudeAdapter.buildArgs', () => {
   });
 });
 
+describe('ClaudeAdapter.interrupt', () => {
+  const options = {
+    cwd: 'D:/proj',
+    hubUrl: 'http://127.0.0.1:5000/hub/abc/claude',
+    ownershipUrl: 'http://127.0.0.1:5000/hub/abc/claude/ownership',
+  };
+  interface Internals {
+    busy: boolean;
+    interrupted: boolean;
+    child: unknown;
+    queue: string[];
+    handleLine(line: string): void;
+  }
+
+  it('sends the stream-json interrupt control request to the live process', () => {
+    const adapter = new ClaudeAdapter(options);
+    const written: string[] = [];
+    const internals = adapter as unknown as Internals;
+    internals.busy = true;
+    internals.child = { stdin: { write: (line: string) => written.push(line) } };
+
+    adapter.interrupt();
+
+    expect(written).toHaveLength(1);
+    const request = JSON.parse(written[0] ?? '') as {
+      type: string;
+      request_id: string;
+      request: { subtype: string };
+    };
+    expect(request.type).toBe('control_request');
+    expect(request.request.subtype).toBe('interrupt');
+    expect(request.request_id).toBeTruthy();
+  });
+
+  it('is a no-op when idle', () => {
+    const adapter = new ClaudeAdapter(options);
+    expect(() => adapter.interrupt()).not.toThrow();
+    expect((adapter as unknown as Internals).interrupted).toBe(false);
+  });
+
+  it('swallows the aborted-turn error and holds queued digests', () => {
+    const adapter = new ClaudeAdapter(options);
+    const events: AgentEvent[] = [];
+    adapter.onEvent((e) => events.push(e));
+    const internals = adapter as unknown as Internals;
+    internals.busy = true;
+    internals.interrupted = true;
+    internals.queue.push('peer chatter while working');
+
+    // what the CLI streams back after an interrupt: an error result
+    internals.handleLine(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        is_error: true,
+        result: 'Request interrupted by user',
+      }),
+    );
+
+    expect(adapter.busy).toBe(false);
+    expect(internals.interrupted).toBe(false);
+    expect(events.some((e) => e.type === 'error')).toBe(false);
+    // held for the next delivery instead of auto-flushed
+    expect(internals.queue).toEqual(['peer chatter while working']);
+  });
+});
+
 describe('ClaudeAdapter state files', () => {
   it('pre-allows all hub tools — headless mode cannot answer permission prompts', () => {
     const adapter = new ClaudeAdapter({
